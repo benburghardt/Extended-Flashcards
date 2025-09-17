@@ -54,3 +54,6 @@ SETUP.md
 # Temporary files
 *.tmp
 *.temp
+
+# Claude
+.claude
