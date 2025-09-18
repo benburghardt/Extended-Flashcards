@@ -28,7 +28,6 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     { tool: 'add-side', label: 'Add Side', icon: '⬜' },
     { tool: 'add-arrow', label: 'Add Arrow', icon: '➡️' },
     { tool: 'pan', label: 'Pan', icon: '✋' },
-    { tool: 'zoom', label: 'Zoom', icon: '🔍' },
   ];
 
   return (

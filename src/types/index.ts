@@ -98,7 +98,7 @@ export interface AppState {
   studySession?: StudySession;
 }
 
-export type CanvasTool = 'select' | 'add-side' | 'add-arrow' | 'pan' | 'zoom';
+export type CanvasTool = 'select' | 'add-side' | 'add-arrow' | 'pan';
 
 export interface CanvasState {
   zoom: number;
