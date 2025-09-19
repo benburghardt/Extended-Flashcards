@@ -231,32 +231,9 @@ export class CanvasUtils {
     const sourceEdge = this.determineEdgeFromVector(sourceSide, destSide);
     const destEdge = this.determineEdgeFromVector(destSide, sourceSide);
 
-    // Get all arrows for each edge to calculate distribution
-    const sourceEdgeArrows = allArrows.filter(a => {
-      const aSide = sides.find(s => s.id === a.sourceId);
-      const aDestSide = sides.find(s => s.id === a.destinationId);
-      return aSide && aDestSide && this.determineEdgeFromVector(aSide, aDestSide) === sourceEdge && aSide.id === sourceSide.id;
-    });
-
-    const destEdgeArrows = allArrows.filter(a => {
-      const aSide = sides.find(s => s.id === a.destinationId);
-      const aSourceSide = sides.find(s => s.id === a.sourceId);
-      return aSide && aSourceSide && this.determineEdgeFromVector(aSourceSide, aSide) === destEdge && aSide.id === destSide.id;
-    });
-
-    // Sort arrows for source edge
-    const sortedSourceArrows = this.sortArrowsForEdge(sourceEdgeArrows, sourceEdge, sides, true);
-
-    // Sort arrows for destination edge
-    const sortedDestArrows = this.sortArrowsForEdge(destEdgeArrows, destEdge, sides, false);
-
-    // Find position in sorted arrays
-    const sourceIndex = sortedSourceArrows.findIndex(a => a.id === arrow.id);
-    const destIndex = sortedDestArrows.findIndex(a => a.id === arrow.id);
-
-    // Calculate actual edge points
-    const sourcePoint = this.getArrowEdgePoint(sourceSide, sourceEdge, sourceIndex, sortedSourceArrows.length);
-    const destPoint = this.getArrowEdgePoint(destSide, destEdge, destIndex, sortedDestArrows.length);
+    // Get connection points from each side
+    const sourcePoint = this.getSideEdgeConnectionPoint(sourceSide, sourceEdge, arrow, allArrows, sides);
+    const destPoint = this.getSideEdgeConnectionPoint(destSide, destEdge, arrow, allArrows, sides);
 
     // Calculate path with required travel distance
     const path = this.calculateArrowPathWithTravel(sourcePoint, destPoint, sourceEdge, destEdge, sourceSide, destSide);
@@ -264,34 +241,72 @@ export class CanvasUtils {
     return path;
   }
 
-  static sortArrowsForEdge(
-    arrows: Arrow[],
+  static getSideEdgeConnectionPoint(
+    side: FlashcardSide,
     edge: 'top' | 'bottom' | 'left' | 'right',
-    sides: FlashcardSide[],
-    isSource: boolean
-  ): Arrow[] {
-    return arrows.sort((a, b) => {
-      const aSide = isSource ? sides.find(s => s.id === a.destinationId) : sides.find(s => s.id === a.sourceId);
-      const bSide = isSource ? sides.find(s => s.id === b.destinationId) : sides.find(s => s.id === b.sourceId);
+    currentArrow: Arrow,
+    allArrows: Arrow[],
+    sides: FlashcardSide[]
+  ): Position {
+    // Get all arrows that connect to this edge of this side (both inbound and outbound)
+    const edgeArrows = allArrows.filter(arrow => {
+      const sourceSide = sides.find(s => s.id === arrow.sourceId);
+      const destSide = sides.find(s => s.id === arrow.destinationId);
 
-      if (!aSide || !bSide) return 0;
+      if (!sourceSide || !destSide) return false;
 
-      const aCenter = this.getSideCenter(aSide);
-      const bCenter = this.getSideCenter(bSide);
+      // Check if this arrow uses this edge as source (outbound from this side)
+      if (sourceSide.id === side.id) {
+        return this.determineEdgeFromVector(sourceSide, destSide) === edge;
+      }
+
+      // Check if this arrow uses this edge as destination (inbound to this side)
+      if (destSide.id === side.id) {
+        // For inbound arrows, we need to determine which edge of the destination they connect to
+        // This is the opposite edge from where they exit the source
+        return this.determineEdgeFromVector(destSide, sourceSide) === edge;
+      }
+
+      return false;
+    });
+
+    // Sort all arrows on this edge by the position of their "other end"
+    const sortedEdgeArrows = edgeArrows.sort((a, b) => {
+      // For each arrow, find the "other side" (the side it connects to that's not the current side)
+      const aOtherSide = a.sourceId === side.id
+        ? sides.find(s => s.id === a.destinationId)
+        : sides.find(s => s.id === a.sourceId);
+
+      const bOtherSide = b.sourceId === side.id
+        ? sides.find(s => s.id === b.destinationId)
+        : sides.find(s => s.id === b.sourceId);
+
+      if (!aOtherSide || !bOtherSide) return 0;
+
+      const aCenter = this.getSideCenter(aOtherSide);
+      const bCenter = this.getSideCenter(bOtherSide);
 
       if (edge === 'top' || edge === 'bottom') {
-        // Horizontal edge: sort by largest x coordinate, then by lowest y difference
+        // Horizontal edge: sort by X coordinate of the other side
         const xDiff = bCenter.x - aCenter.x;
         if (Math.abs(xDiff) > 5) return xDiff; // 5px tolerance
         return Math.abs(aCenter.y) - Math.abs(bCenter.y);
       } else {
-        // Vertical edge: sort by largest y coordinate, then by lowest x difference
+        // Vertical edge: sort by Y coordinate of the other side
         const yDiff = bCenter.y - aCenter.y;
         if (Math.abs(yDiff) > 5) return yDiff; // 5px tolerance
         return Math.abs(aCenter.x) - Math.abs(bCenter.x);
       }
     });
+
+    // Find the position of the current arrow in the sorted list
+    const arrowIndex = sortedEdgeArrows.findIndex(a => a.id === currentArrow.id);
+    const totalArrows = sortedEdgeArrows.length;
+
+    // Calculate the connection point on this edge
+    return this.getArrowEdgePoint(side, edge, arrowIndex, totalArrows);
   }
+
 
   static getArrowEdgePoint(
     side: FlashcardSide,

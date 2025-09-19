@@ -54,6 +54,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<Position | null>(null);
   const [dragSideId, setDragSideId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<Position | null>(null);
   const [hoverSideId, setHoverSideId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<Position>({ x: 0, y: 0 });
   const [editing, setEditing] = useState<EditingState>({ sideId: null, text: '', inputRect: null });
@@ -305,9 +306,15 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
         y: (mousePos.y - canvasState.panOffset.y) / canvasState.zoom
       };
 
+      // Center the preview on the cursor by offsetting by half the side dimensions
+      const centeredCanvasPos = {
+        x: canvasMousePos.x - SIDE_WIDTH / 2,
+        y: canvasMousePos.y - SIDE_HEIGHT / 2
+      };
+
       const previewPos = canvasState.gridSnapEnabled
-        ? CanvasUtils.snapToGrid(canvasMousePos, canvasState.gridSize)
-        : canvasMousePos;
+        ? CanvasUtils.snapToGrid(centeredCanvasPos, canvasState.gridSize)
+        : centeredCanvasPos;
       const screenPreviewPos = CanvasUtils.canvasToScreen(previewPos, canvasState);
 
       const previewWidth = SIDE_WIDTH * canvasState.zoom;
@@ -449,10 +456,14 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
     const clickedSide = findSideAtPosition(canvasPos);
 
     if (selectedTool === 'add-side' && !clickedSide) {
-      // Create new side at click position
+      // Create new side centered on click position
+      const centeredPos = {
+        x: canvasPos.x - SIDE_WIDTH / 2,
+        y: canvasPos.y - SIDE_HEIGHT / 2
+      };
       const snappedPos = canvasState.gridSnapEnabled
-        ? CanvasUtils.snapToGrid(canvasPos, canvasState.gridSize)
-        : canvasPos;
+        ? CanvasUtils.snapToGrid(centeredPos, canvasState.gridSize)
+        : centeredPos;
       onCanvasClick(snappedPos);
     } else if (selectedTool === 'add-arrow') {
       if (clickedSide) {
@@ -507,6 +518,13 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
       setIsDragging(true);
       setDragStart(canvasPos);
       setDragSideId(clickedSide.id);
+
+      // Calculate offset from click position to side's top-left corner
+      const clickOffset = {
+        x: canvasPos.x - clickedSide.position.x,
+        y: canvasPos.y - clickedSide.position.y
+      };
+      setDragOffset(clickOffset);
     }
   };
 
@@ -536,15 +554,13 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
     const hoveredSide = findSideAtPosition(canvasPos);
     setHoverSideId(hoveredSide?.id || null);
 
-    if (isDragging && dragStart && dragSideId) {
-      const deltaX = canvasPos.x - dragStart.x;
-      const deltaY = canvasPos.y - dragStart.y;
-
+    if (isDragging && dragSideId && dragOffset) {
       const side = flashcard.sides.find(s => s.id === dragSideId);
       if (side) {
+        // Calculate new position by subtracting the click offset from current mouse position
         const newPosition = {
-          x: side.position.x + deltaX,
-          y: side.position.y + deltaY
+          x: canvasPos.x - dragOffset.x,
+          y: canvasPos.y - dragOffset.y
         };
 
         const snappedPosition = canvasState.gridSnapEnabled
@@ -552,7 +568,6 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
           : newPosition;
 
         onSideMove(dragSideId, snappedPosition);
-        setDragStart(canvasPos);
       }
     }
   };
@@ -561,6 +576,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
     setIsDragging(false);
     setDragStart(null);
     setDragSideId(null);
+    setDragOffset(null);
     setIsPanning(false);
     setPanStart(null);
   };
