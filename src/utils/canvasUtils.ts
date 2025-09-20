@@ -144,51 +144,8 @@ export class CanvasUtils {
     return closestEdge as 'top' | 'bottom' | 'left' | 'right';
   }
 
-  static getSideEdgePoint(fromSide: FlashcardSide, toSide: FlashcardSide): Position {
-    const fromCenter = this.getSideCenter(fromSide);
-    const toCenter = this.getSideCenter(toSide);
-
-    const fromWidth = fromSide.width || 100;
-    const fromHeight = fromSide.height || 60;
-
-    const dx = toCenter.x - fromCenter.x;
-    const dy = toCenter.y - fromCenter.y;
-
-    // Calculate distances to each edge
-    const distanceToRight = Math.abs(dx > 0 ? dx : Infinity);
-    const distanceToLeft = Math.abs(dx < 0 ? dx : Infinity);
-    const distanceToBottom = Math.abs(dy > 0 ? dy : Infinity);
-    const distanceToTop = Math.abs(dy < 0 ? dy : Infinity);
-
-    // Find the edge with the shortest perpendicular path
-    const minDistance = Math.min(distanceToRight, distanceToLeft, distanceToBottom, distanceToTop);
-
-    if (minDistance === distanceToRight) {
-      // Connect from right edge
-      return {
-        x: fromSide.position.x + fromWidth,
-        y: fromCenter.y
-      };
-    } else if (minDistance === distanceToLeft) {
-      // Connect from left edge
-      return {
-        x: fromSide.position.x,
-        y: fromCenter.y
-      };
-    } else if (minDistance === distanceToBottom) {
-      // Connect from bottom edge
-      return {
-        x: fromCenter.x,
-        y: fromSide.position.y + fromHeight
-      };
-    } else {
-      // Connect from top edge
-      return {
-        x: fromCenter.x,
-        y: fromSide.position.y
-      };
-    }
-  }
+  // DEPRECATED: Replaced by getSideEdgeConnectionPoint with advanced distribution
+  // static getSideEdgePoint() - removed in Phase 1 cleanup
 
   private static distanceToLineSegment(
     point: Position,
@@ -381,9 +338,9 @@ export class CanvasUtils {
     sourcePoint: Position,
     destPoint: Position,
     sourceEdge: 'top' | 'bottom' | 'left' | 'right',
-    destEdge: 'top' | 'bottom' | 'left' | 'right',
-    sourceSide: FlashcardSide,
-    destSide: FlashcardSide
+    _destEdge: 'top' | 'bottom' | 'left' | 'right',
+    _sourceSide: FlashcardSide,
+    _destSide: FlashcardSide
   ): Position[] {
     const dx = destPoint.x - sourcePoint.x;
     const dy = destPoint.y - sourcePoint.y;
@@ -427,40 +384,8 @@ export class CanvasUtils {
     return [sourcePoint, firstCorner, secondCorner, destPoint];
   }
 
-  static calculateArrowPath(
-    sourceCenter: Position,
-    destCenter: Position
-  ): { path: Position[], arrowHead: Position[] } {
-    const dx = destCenter.x - sourceCenter.x;
-    const dy = destCenter.y - sourceCenter.y;
-    const length = Math.sqrt(dx * dx + dy * dy);
-
-    if (length === 0) {
-      return { path: [sourceCenter, destCenter], arrowHead: [] };
-    }
-
-    const unitX = dx / length;
-    const unitY = dy / length;
-
-    // Arrow head size
-    const headLength = 15;
-    const headAngle = Math.PI / 6;
-
-    // Calculate arrow head points
-    const headX1 = destCenter.x - headLength * Math.cos(Math.atan2(dy, dx) - headAngle);
-    const headY1 = destCenter.y - headLength * Math.sin(Math.atan2(dy, dx) - headAngle);
-    const headX2 = destCenter.x - headLength * Math.cos(Math.atan2(dy, dx) + headAngle);
-    const headY2 = destCenter.y - headLength * Math.sin(Math.atan2(dy, dx) + headAngle);
-
-    return {
-      path: [sourceCenter, destCenter],
-      arrowHead: [
-        { x: headX1, y: headY1 },
-        destCenter,
-        { x: headX2, y: headY2 },
-      ],
-    };
-  }
+  // DEPRECATED: Simple arrow path replaced by calculateAdvancedArrowPath
+  // static calculateArrowPath() - removed in Phase 1 cleanup
 
   static drawGrid(
     ctx: CanvasRenderingContext2D,
@@ -538,11 +463,11 @@ export class CanvasUtils {
     const middleSegment = { start: path[1], end: path[2] };
 
     // Check collision with all sides except source and destination
-    const sourceSide = allSides.find(s => s.id === currentArrow.sourceId);
-    const destSide = allSides.find(s => s.id === currentArrow.destinationId);
+    const sourceSideId = currentArrow.sourceId;
+    const destSideId = currentArrow.destinationId;
 
     for (const side of allSides) {
-      if (side.id === currentArrow.sourceId || side.id === currentArrow.destinationId) continue;
+      if (side.id === sourceSideId || side.id === destSideId) continue;
 
       const width = side.width || 100;
       const height = side.height || 60;
@@ -588,9 +513,9 @@ export class CanvasUtils {
     allArrows: Arrow[],
     currentArrow: Arrow,
     sourceEdge: 'top' | 'bottom' | 'left' | 'right',
-    destEdge: 'top' | 'bottom' | 'left' | 'right',
-    sourceSide: FlashcardSide,
-    destSide: FlashcardSide
+    _destEdge: 'top' | 'bottom' | 'left' | 'right',
+    _sourceSide: FlashcardSide,
+    _destSide: FlashcardSide
   ): Position[] {
     if (originalPath.length !== 4) return originalPath;
 
@@ -703,8 +628,8 @@ export class CanvasUtils {
       return arrowPath[0] || { x: 0, y: 0 };
     }
 
-    // Calculate total path length
-    const totalLength = this.calculatePathLength(arrowPath);
+    // Calculate total path length (for future use if needed)
+    // const totalLength = this.calculatePathLength(arrowPath);
 
     // Try positions from 30% to 70% of the path length
     const startPercent = 0.3;

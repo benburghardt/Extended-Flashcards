@@ -31,6 +31,7 @@ export interface Flashcard {
   modifiedAt: Date;
 }
 
+// FlashcardTemplate - Reserved for Phase 4 (Templates)
 export interface FlashcardTemplate {
   id: string;
   name: string;
@@ -53,6 +54,7 @@ export interface FlashcardSet {
   version: string;
 }
 
+// Study-related interfaces - Reserved for Phase 3 (Study System)
 export interface StudyProgress {
   arrowId: string;
   timesStudied: number;
@@ -111,6 +113,7 @@ export interface CanvasState {
   gridSize: number;
 }
 
+// FileMetadata - Reserved for Phase 2 (File System Integration)
 export interface FileMetadata {
   name: string;
   path: string;

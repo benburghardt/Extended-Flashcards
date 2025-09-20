@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
 import { Flashcard, CanvasState, CanvasTool, Position, FlashcardSide, Arrow } from '../../types';
-import { CanvasUtils } from '../../utils/canvasUtils';
+import { CanvasUtils } from '../../utils/canvasUtils.ts';
 
 interface FlashcardCanvasProps {
   flashcard: Flashcard;
@@ -56,7 +56,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<Position | null>(null);
+  // const [dragStart, setDragStart] = useState<Position | null>(null); // Reserved for future use
   const [dragSideId, setDragSideId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Position | null>(null);
   const [hoverSideId, setHoverSideId] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   // Constants for rendering (base sizes, scaling handled in drawing)
   const SIDE_WIDTH = 120;
   const SIDE_HEIGHT = 80;
-  const CLICK_TOLERANCE = 5;
+  // const CLICK_TOLERANCE = 5; // Reserved for future use
 
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -165,7 +165,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
     const canvasPath = CanvasUtils.calculateAdvancedArrowPath(arrow, flashcard.arrows, flashcard.sides);
 
     // Convert canvas coordinates to screen coordinates
-    return canvasPath.map(point => CanvasUtils.canvasToScreen(point, canvasState));
+    return canvasPath.map((point: Position) => CanvasUtils.canvasToScreen(point, canvasState));
   }, [flashcard.sides, flashcard.arrows, canvasState]);
 
   const drawArrow = useCallback((ctx: CanvasRenderingContext2D, arrow: Arrow) => {
@@ -623,7 +623,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
 
     if (clickedSide && canvasState.selectedSideIds.includes(clickedSide.id)) {
       setIsDragging(true);
-      setDragStart(canvasPos);
+      // setDragStart(canvasPos); // Reserved for future use
       setDragSideId(clickedSide.id);
 
       // Calculate offset from click position to side's top-left corner
@@ -691,7 +691,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
 
   const handleCanvasMouseUp = () => {
     setIsDragging(false);
-    setDragStart(null);
+    // setDragStart(null); // Reserved for future use
     setDragSideId(null);
     setDragOffset(null);
     setIsPanning(false);

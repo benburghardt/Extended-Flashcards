@@ -1,3 +1,4 @@
+// Phase 2: Tauri File Service - Framework ready for implementation
 import { FlashcardSet, FlashcardTemplate, FileMetadata } from '../types';
 
 // Tauri API imports will be added when implementing

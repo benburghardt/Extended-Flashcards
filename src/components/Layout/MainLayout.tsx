@@ -12,7 +12,7 @@ export const MainLayout: React.FC = () => {
   const { state: canvasState, dispatch: canvasDispatch } = useCanvas();
   const [showFileManager, setShowFileManager] = useState(false);
 
-  const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
   const handleToolSelect = (tool: string) => {
     appDispatch({ type: 'SET_SELECTED_TOOL', payload: tool as any });
@@ -22,8 +22,8 @@ export const MainLayout: React.FC = () => {
   };
 
   const handleStudyModeSelect = (mode: StudyMode) => {
-    // Implementation will create study session
-    console.log('Selected study mode:', mode);
+    // Phase 3: Study mode implementation placeholder
+    console.log('Study mode selected (not implemented yet):', mode);
   };
 
   const handleSideSelect = (sideId: string, multiSelect?: boolean) => {
