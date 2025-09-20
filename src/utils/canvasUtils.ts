@@ -49,8 +49,8 @@ export class CanvasUtils {
     allArrows: Arrow[],
     tolerance: number = 10
   ): boolean {
-    // Get the advanced arrow path
-    const pathPoints = this.calculateAdvancedArrowPath(arrow, allArrows, sides);
+    // Get the advanced arrow path (skip collision detection to avoid recursion)
+    const pathPoints = this.calculateAdvancedArrowPath(arrow, allArrows, sides, true);
 
     if (pathPoints.length < 2) return false;
 
@@ -220,7 +220,8 @@ export class CanvasUtils {
   static calculateAdvancedArrowPath(
     arrow: Arrow,
     allArrows: Arrow[],
-    sides: FlashcardSide[]
+    sides: FlashcardSide[],
+    skipCollisionDetection: boolean = false
   ): Position[] {
     const sourceSide = sides.find(s => s.id === arrow.sourceId);
     const destSide = sides.find(s => s.id === arrow.destinationId);
@@ -236,7 +237,14 @@ export class CanvasUtils {
     const destPoint = this.getSideEdgeConnectionPoint(destSide, destEdge, arrow, allArrows, sides);
 
     // Calculate path with required travel distance
-    const path = this.calculateArrowPathWithTravel(sourcePoint, destPoint, sourceEdge, destEdge, sourceSide, destSide);
+    const initialPath = this.calculateArrowPathWithTravel(sourcePoint, destPoint, sourceEdge, destEdge, sourceSide, destSide);
+
+    // Apply collision avoidance only if not already in collision detection mode
+    if (skipCollisionDetection) {
+      return initialPath;
+    }
+
+    const path = this.adjustPathForCollisions(initialPath, sides, allArrows, arrow, sourceEdge, destEdge, sourceSide, destSide);
 
     return path;
   }
@@ -290,11 +298,31 @@ export class CanvasUtils {
         // Horizontal edge: sort by X coordinate of the other side
         const xDiff = bCenter.x - aCenter.x;
         if (Math.abs(xDiff) > 5) return xDiff; // 5px tolerance
+
+        // If same other side, sort by source/destination priority
+        if (Math.abs(xDiff) <= 5 && aOtherSide.id === bOtherSide.id) {
+          const aIsSource = a.sourceId === side.id;
+          const bIsSource = b.sourceId === side.id;
+          if (aIsSource !== bIsSource) {
+            return aIsSource ? 1 : -1; // Source arrows (larger) after destination arrows (smaller)
+          }
+        }
+
         return Math.abs(aCenter.y) - Math.abs(bCenter.y);
       } else {
         // Vertical edge: sort by Y coordinate of the other side
         const yDiff = bCenter.y - aCenter.y;
         if (Math.abs(yDiff) > 5) return yDiff; // 5px tolerance
+
+        // If same other side, sort by source/destination priority
+        if (Math.abs(yDiff) <= 5 && aOtherSide.id === bOtherSide.id) {
+          const aIsSource = a.sourceId === side.id;
+          const bIsSource = b.sourceId === side.id;
+          if (aIsSource !== bIsSource) {
+            return aIsSource ? 1 : -1; // Source arrows (larger) after destination arrows (smaller)
+          }
+        }
+
         return Math.abs(aCenter.x) - Math.abs(bCenter.x);
       }
     });
@@ -461,5 +489,434 @@ export class CanvasUtils {
     }
     ctx.stroke();
     ctx.restore();
+  }
+
+  // Collision detection utilities
+  static lineIntersectsRectangle(
+    lineStart: Position,
+    lineEnd: Position,
+    rectX: number,
+    rectY: number,
+    rectWidth: number,
+    rectHeight: number
+  ): boolean {
+    // Check if line intersects any of the four rectangle edges
+    const edges = [
+      { start: { x: rectX, y: rectY }, end: { x: rectX + rectWidth, y: rectY } }, // top
+      { start: { x: rectX + rectWidth, y: rectY }, end: { x: rectX + rectWidth, y: rectY + rectHeight } }, // right
+      { start: { x: rectX + rectWidth, y: rectY + rectHeight }, end: { x: rectX, y: rectY + rectHeight } }, // bottom
+      { start: { x: rectX, y: rectY + rectHeight }, end: { x: rectX, y: rectY } } // left
+    ];
+
+    return edges.some(edge => this.lineSegmentsIntersect(lineStart, lineEnd, edge.start, edge.end));
+  }
+
+  static lineSegmentsIntersect(
+    p1: Position,
+    p2: Position,
+    p3: Position,
+    p4: Position
+  ): boolean {
+    const denominator = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
+
+    if (denominator === 0) return false; // Lines are parallel
+
+    const ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / denominator;
+    const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / denominator;
+
+    return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
+  }
+
+  static checkMiddleSegmentCollisions(
+    path: Position[],
+    allSides: FlashcardSide[],
+    allArrows: Arrow[],
+    currentArrow: Arrow
+  ): boolean {
+    if (path.length !== 4) return false;
+
+    const middleSegment = { start: path[1], end: path[2] };
+
+    // Check collision with all sides except source and destination
+    const sourceSide = allSides.find(s => s.id === currentArrow.sourceId);
+    const destSide = allSides.find(s => s.id === currentArrow.destinationId);
+
+    for (const side of allSides) {
+      if (side.id === currentArrow.sourceId || side.id === currentArrow.destinationId) continue;
+
+      const width = side.width || 100;
+      const height = side.height || 60;
+
+      if (this.lineIntersectsRectangle(
+        middleSegment.start,
+        middleSegment.end,
+        side.position.x,
+        side.position.y,
+        width,
+        height
+      )) {
+        return true;
+      }
+    }
+
+    // Check collision with other arrows
+    for (const arrow of allArrows) {
+      if (arrow.id === currentArrow.id) continue;
+
+      const otherPath = this.calculateAdvancedArrowPath(arrow, allArrows, allSides, true);
+      if (otherPath.length < 2) continue;
+
+      // Check intersection with each segment of the other arrow
+      for (let i = 0; i < otherPath.length - 1; i++) {
+        if (this.lineSegmentsIntersect(
+          middleSegment.start,
+          middleSegment.end,
+          otherPath[i],
+          otherPath[i + 1]
+        )) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static adjustPathForCollisions(
+    originalPath: Position[],
+    allSides: FlashcardSide[],
+    allArrows: Arrow[],
+    currentArrow: Arrow,
+    sourceEdge: 'top' | 'bottom' | 'left' | 'right',
+    destEdge: 'top' | 'bottom' | 'left' | 'right',
+    sourceSide: FlashcardSide,
+    destSide: FlashcardSide
+  ): Position[] {
+    if (originalPath.length !== 4) return originalPath;
+
+    if (!this.checkMiddleSegmentCollisions(originalPath, allSides, allArrows, currentArrow)) {
+      return originalPath; // No collision, return original path
+    }
+
+    // Try adjusting the path by expanding the travel distance
+    const sourcePoint = originalPath[0];
+    const destPoint = originalPath[3];
+    const dx = destPoint.x - sourcePoint.x;
+    const dy = destPoint.y - sourcePoint.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Try progressively larger travel distances
+    const baseTravelDistance = Math.max(distance * 0.2, 40);
+    const maxAttempts = 5;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const travelMultiplier = 1 + (attempt * 0.5); // 1.5x, 2x, 2.5x, 3x, 3.5x
+      const adjustedTravel = baseTravelDistance * travelMultiplier;
+
+      let firstCorner: Position;
+      let secondCorner: Position;
+
+      // Calculate adjusted path with larger travel distance
+      if (sourceEdge === 'left' || sourceEdge === 'right') {
+        const travelX = sourceEdge === 'right' ? adjustedTravel : -adjustedTravel;
+        firstCorner = {
+          x: sourcePoint.x + travelX,
+          y: sourcePoint.y
+        };
+        secondCorner = {
+          x: firstCorner.x,
+          y: destPoint.y
+        };
+      } else {
+        const travelY = sourceEdge === 'bottom' ? adjustedTravel : -adjustedTravel;
+        firstCorner = {
+          x: sourcePoint.x,
+          y: sourcePoint.y + travelY
+        };
+        secondCorner = {
+          x: destPoint.x,
+          y: firstCorner.y
+        };
+      }
+
+      const adjustedPath = [sourcePoint, firstCorner, secondCorner, destPoint];
+
+      // Check if this adjusted path avoids collisions
+      if (!this.checkMiddleSegmentCollisions(adjustedPath, allSides, allArrows, currentArrow)) {
+        return adjustedPath;
+      }
+    }
+
+    // If we still have collisions, try the opposite direction
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const travelMultiplier = 1 + (attempt * 0.5);
+      const adjustedTravel = baseTravelDistance * travelMultiplier;
+
+      let firstCorner: Position;
+      let secondCorner: Position;
+
+      // Calculate path in opposite direction
+      if (sourceEdge === 'left' || sourceEdge === 'right') {
+        const travelX = sourceEdge === 'left' ? adjustedTravel : -adjustedTravel; // Opposite direction
+        firstCorner = {
+          x: sourcePoint.x + travelX,
+          y: sourcePoint.y
+        };
+        secondCorner = {
+          x: firstCorner.x,
+          y: destPoint.y
+        };
+      } else {
+        const travelY = sourceEdge === 'top' ? adjustedTravel : -adjustedTravel; // Opposite direction
+        firstCorner = {
+          x: sourcePoint.x,
+          y: sourcePoint.y + travelY
+        };
+        secondCorner = {
+          x: destPoint.x,
+          y: firstCorner.y
+        };
+      }
+
+      const adjustedPath = [sourcePoint, firstCorner, secondCorner, destPoint];
+
+      if (!this.checkMiddleSegmentCollisions(adjustedPath, allSides, allArrows, currentArrow)) {
+        return adjustedPath;
+      }
+    }
+
+    // If all attempts fail, return original path (better than no path)
+    return originalPath;
+  }
+
+  // Arrow label positioning with collision avoidance
+  static findOptimalLabelPosition(
+    arrowPath: Position[],
+    labelWidth: number,
+    labelHeight: number,
+    allSides: FlashcardSide[],
+    allArrows: Arrow[],
+    currentArrow: Arrow,
+    sides: FlashcardSide[]
+  ): Position {
+    if (arrowPath.length < 2) {
+      return arrowPath[0] || { x: 0, y: 0 };
+    }
+
+    // Calculate total path length
+    const totalLength = this.calculatePathLength(arrowPath);
+
+    // Try positions from 30% to 70% of the path length
+    const startPercent = 0.3;
+    const endPercent = 0.7;
+    const preferredPercent = 0.5; // Prefer center
+
+    // First try the preferred center position
+    const centerPos = this.getPositionAtPercent(arrowPath, preferredPercent);
+    if (!this.labelCollidesWithElements(centerPos, labelWidth, labelHeight, allSides, allArrows, currentArrow, sides)) {
+      return centerPos;
+    }
+
+    // Try positions in increments, alternating around center
+    const increment = 0.05; // 5% increments
+    for (let offset = increment; offset <= 0.2; offset += increment) {
+      // Try position before center
+      const beforePercent = preferredPercent - offset;
+      if (beforePercent >= startPercent) {
+        const beforePos = this.getPositionAtPercent(arrowPath, beforePercent);
+        if (!this.labelCollidesWithElements(beforePos, labelWidth, labelHeight, allSides, allArrows, currentArrow, sides)) {
+          return beforePos;
+        }
+      }
+
+      // Try position after center
+      const afterPercent = preferredPercent + offset;
+      if (afterPercent <= endPercent) {
+        const afterPos = this.getPositionAtPercent(arrowPath, afterPercent);
+        if (!this.labelCollidesWithElements(afterPos, labelWidth, labelHeight, allSides, allArrows, currentArrow, sides)) {
+          return afterPos;
+        }
+      }
+    }
+
+    // If no collision-free position found, find position with least severe collision
+    // Prefer colliding with arrows over sides
+    let bestPosition = centerPos;
+    let bestScore = this.calculateCollisionScore(centerPos, labelWidth, labelHeight, allSides, allArrows, currentArrow, sides);
+
+    for (let percent = startPercent; percent <= endPercent; percent += increment) {
+      const pos = this.getPositionAtPercent(arrowPath, percent);
+      const score = this.calculateCollisionScore(pos, labelWidth, labelHeight, allSides, allArrows, currentArrow, sides);
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestPosition = pos;
+      }
+    }
+
+    return bestPosition;
+  }
+
+  static calculatePathLength(path: Position[]): number {
+    let length = 0;
+    for (let i = 1; i < path.length; i++) {
+      const dx = path[i].x - path[i - 1].x;
+      const dy = path[i].y - path[i - 1].y;
+      length += Math.sqrt(dx * dx + dy * dy);
+    }
+    return length;
+  }
+
+  static getPositionAtPercent(path: Position[], percent: number): Position {
+    if (path.length < 2) return path[0] || { x: 0, y: 0 };
+
+    const totalLength = this.calculatePathLength(path);
+    const targetLength = totalLength * percent;
+
+    let currentLength = 0;
+
+    for (let i = 1; i < path.length; i++) {
+      const segmentStart = path[i - 1];
+      const segmentEnd = path[i];
+
+      const dx = segmentEnd.x - segmentStart.x;
+      const dy = segmentEnd.y - segmentStart.y;
+      const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+      if (currentLength + segmentLength >= targetLength) {
+        // Target position is within this segment
+        const remainingLength = targetLength - currentLength;
+        const segmentPercent = remainingLength / segmentLength;
+
+        return {
+          x: segmentStart.x + dx * segmentPercent,
+          y: segmentStart.y + dy * segmentPercent
+        };
+      }
+
+      currentLength += segmentLength;
+    }
+
+    // If we get here, return the last position
+    return path[path.length - 1];
+  }
+
+  static labelCollidesWithElements(
+    labelPos: Position,
+    labelWidth: number,
+    labelHeight: number,
+    allSides: FlashcardSide[],
+    allArrows: Arrow[],
+    currentArrow: Arrow,
+    sides: FlashcardSide[]
+  ): boolean {
+    const labelRect = {
+      x: labelPos.x - labelWidth / 2,
+      y: labelPos.y - labelHeight / 2,
+      width: labelWidth,
+      height: labelHeight
+    };
+
+    // Check collision with sides (excluding source and destination of current arrow)
+    for (const side of allSides) {
+      if (side.id === currentArrow.sourceId || side.id === currentArrow.destinationId) continue;
+
+      const sideWidth = side.width || 100;
+      const sideHeight = side.height || 60;
+
+      if (this.rectanglesOverlap(
+        labelRect.x, labelRect.y, labelRect.width, labelRect.height,
+        side.position.x, side.position.y, sideWidth, sideHeight
+      )) {
+        return true;
+      }
+    }
+
+    // Check collision with other arrow paths
+    for (const arrow of allArrows) {
+      if (arrow.id === currentArrow.id) continue;
+
+      const otherPath = this.calculateAdvancedArrowPath(arrow, allArrows, sides, true);
+      if (otherPath.length < 2) continue;
+
+      // Check if label overlaps with any segment of the other arrow
+      for (let i = 0; i < otherPath.length - 1; i++) {
+        if (this.lineIntersectsRectangle(
+          otherPath[i],
+          otherPath[i + 1],
+          labelRect.x,
+          labelRect.y,
+          labelRect.width,
+          labelRect.height
+        )) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static calculateCollisionScore(
+    labelPos: Position,
+    labelWidth: number,
+    labelHeight: number,
+    allSides: FlashcardSide[],
+    allArrows: Arrow[],
+    currentArrow: Arrow,
+    sides: FlashcardSide[]
+  ): number {
+    let score = 0;
+    const labelRect = {
+      x: labelPos.x - labelWidth / 2,
+      y: labelPos.y - labelHeight / 2,
+      width: labelWidth,
+      height: labelHeight
+    };
+
+    // Higher penalty for colliding with sides
+    for (const side of allSides) {
+      if (side.id === currentArrow.sourceId || side.id === currentArrow.destinationId) continue;
+
+      const sideWidth = side.width || 100;
+      const sideHeight = side.height || 60;
+
+      if (this.rectanglesOverlap(
+        labelRect.x, labelRect.y, labelRect.width, labelRect.height,
+        side.position.x, side.position.y, sideWidth, sideHeight
+      )) {
+        score += 100; // High penalty for side collision
+      }
+    }
+
+    // Lower penalty for colliding with arrows
+    for (const arrow of allArrows) {
+      if (arrow.id === currentArrow.id) continue;
+
+      const otherPath = this.calculateAdvancedArrowPath(arrow, allArrows, sides, true);
+      if (otherPath.length < 2) continue;
+
+      for (let i = 0; i < otherPath.length - 1; i++) {
+        if (this.lineIntersectsRectangle(
+          otherPath[i],
+          otherPath[i + 1],
+          labelRect.x,
+          labelRect.y,
+          labelRect.width,
+          labelRect.height
+        )) {
+          score += 10; // Lower penalty for arrow collision
+        }
+      }
+    }
+
+    return score;
+  }
+
+  static rectanglesOverlap(
+    x1: number, y1: number, w1: number, h1: number,
+    x2: number, y2: number, w2: number, h2: number
+  ): boolean {
+    return !(x1 + w1 < x2 || x2 + w2 < x1 || y1 + h1 < y2 || y2 + h2 < y1);
   }
 }

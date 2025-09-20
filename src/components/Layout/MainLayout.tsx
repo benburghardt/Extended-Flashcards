@@ -72,6 +72,50 @@ export const MainLayout: React.FC = () => {
     appDispatch({ type: 'UPDATE_FLASHCARD', payload: updatedFlashcard });
   };
 
+  const handleSideDelete = (sideIds: string[]) => {
+    if (!appState.currentFlashcard) return;
+
+    // Remove the sides and all arrows connected to them
+    const updatedSides = appState.currentFlashcard.sides.filter(side => !sideIds.includes(side.id));
+    const updatedArrows = appState.currentFlashcard.arrows.filter(arrow =>
+      !sideIds.includes(arrow.sourceId) && !sideIds.includes(arrow.destinationId)
+    );
+
+    const updatedFlashcard = {
+      ...appState.currentFlashcard,
+      sides: updatedSides,
+      arrows: updatedArrows
+    };
+
+    updateCurrentFlashcard(updatedFlashcard);
+
+    // Clear selection of deleted sides
+    const remainingSideIds = canvasState.selectedSideIds.filter(id => !sideIds.includes(id));
+    if (remainingSideIds.length !== canvasState.selectedSideIds.length) {
+      canvasDispatch({ type: 'SELECT_SIDES', payload: remainingSideIds });
+    }
+  };
+
+  const handleArrowDelete = (arrowIds: string[]) => {
+    if (!appState.currentFlashcard) return;
+
+    // Remove the arrows
+    const updatedArrows = appState.currentFlashcard.arrows.filter(arrow => !arrowIds.includes(arrow.id));
+
+    const updatedFlashcard = {
+      ...appState.currentFlashcard,
+      arrows: updatedArrows
+    };
+
+    updateCurrentFlashcard(updatedFlashcard);
+
+    // Clear selection of deleted arrows
+    const remainingArrowIds = canvasState.selectedArrowIds.filter(id => !arrowIds.includes(id));
+    if (remainingArrowIds.length !== canvasState.selectedArrowIds.length) {
+      canvasDispatch({ type: 'SELECT_ARROWS', payload: remainingArrowIds });
+    }
+  };
+
   const handleSideMove = (sideId: string, newPosition: { x: number; y: number }) => {
     if (!appState.currentFlashcard) return;
 
@@ -106,6 +150,19 @@ export const MainLayout: React.FC = () => {
 
   const handleArrowCreate = (sourceId: string, destinationId: string) => {
     if (!appState.currentFlashcard) return;
+
+    // Check if an arrow already exists between these two sides
+    const existingArrow = appState.currentFlashcard.arrows.find(arrow =>
+      arrow.sourceId === sourceId && arrow.destinationId === destinationId
+    );
+
+    if (existingArrow) {
+      // Arrow already exists, just select it and start editing
+      canvasDispatch({ type: 'SELECT_ARROWS', payload: [existingArrow.id] });
+      setNewArrowForEditing(existingArrow.id);
+      canvasDispatch({ type: 'FINISH_ARROW_CREATION' });
+      return;
+    }
 
     // Create arrow immediately with empty label
     const newArrow: Arrow = {
@@ -298,9 +355,11 @@ export const MainLayout: React.FC = () => {
               onSideSelect={handleSideSelect}
               onSideMove={handleSideMove}
               onSideTextUpdate={handleSideTextUpdate}
+              onSideDelete={handleSideDelete}
               onArrowCreate={handleArrowCreate}
               onArrowTextUpdate={handleArrowTextUpdate}
               onArrowSelect={handleArrowSelect}
+              onArrowDelete={handleArrowDelete}
               onCanvasClick={handleCanvasClick}
               onZoomChange={(newZoom) => canvasDispatch({ type: 'SET_ZOOM', payload: newZoom })}
               onPanChange={(newOffset) => canvasDispatch({ type: 'SET_PAN_OFFSET', payload: newOffset })}

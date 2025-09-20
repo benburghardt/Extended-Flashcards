@@ -9,9 +9,11 @@ interface FlashcardCanvasProps {
   onSideSelect: (sideId: string, multiSelect?: boolean) => void;
   onSideMove: (sideId: string, newPosition: Position) => void;
   onSideTextUpdate: (sideId: string, newText: string) => void;
+  onSideDelete: (sideIds: string[]) => void;
   onArrowCreate: (sourceId: string, destinationId: string) => void;
   onArrowTextUpdate: (arrowId: string, newText: string) => void;
   onArrowSelect: (arrowId: string, multiSelect?: boolean) => void;
+  onArrowDelete: (arrowIds: string[]) => void;
   onCanvasClick: (position: Position) => void;
   onZoomChange: (newZoom: number) => void;
   onPanChange: (newOffset: Position) => void;
@@ -39,9 +41,11 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   onSideSelect,
   onSideMove,
   onSideTextUpdate,
+  onSideDelete,
   onArrowCreate,
   onArrowTextUpdate,
   onArrowSelect,
+  onArrowDelete,
   onCanvasClick,
   onZoomChange,
   onPanChange,
@@ -56,6 +60,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   const [dragSideId, setDragSideId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Position | null>(null);
   const [hoverSideId, setHoverSideId] = useState<string | null>(null);
+  const [hoverArrowId, setHoverArrowId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<Position>({ x: 0, y: 0 });
   const [editing, setEditing] = useState<EditingState>({ sideId: null, text: '', inputRect: null });
   const [arrowEditing, setArrowEditing] = useState<ArrowEditingState>({ arrowId: null, text: '', inputRect: null });
@@ -169,9 +174,11 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
 
     const isSelected = canvasState.selectedArrowIds.includes(arrow.id);
     const isEditing = arrowEditing.arrowId === arrow.id;
+    const isHovered = hoverArrowId === arrow.id;
 
-    ctx.strokeStyle = isSelected ? '#3498db' : (arrow.color || '#6c757d');
-    ctx.lineWidth = (isSelected ? 3 : 2) * canvasState.zoom;
+    // Enhanced highlighting: blue for selected, lighter blue for hover, default color otherwise
+    ctx.strokeStyle = isSelected ? '#3498db' : (isHovered ? '#74b9ff' : (arrow.color || '#6c757d'));
+    ctx.lineWidth = (isSelected ? 3 : (isHovered ? 2.5 : 2)) * canvasState.zoom;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -208,13 +215,11 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
 
     // Draw label (if not editing and has label, or if empty and not editing)
     if (!isEditing && path.length >= 2) {
-      const midIndex = Math.floor(path.length / 2);
-      const labelPos = path[midIndex];
       const displayText = arrow.label || '  '; // Show 2 spaces for empty labels
 
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = arrow.label ? '#dee2e6' : '#e74c3c'; // Red border for empty labels
-      ctx.lineWidth = (arrow.label ? 1 : 2) * canvasState.zoom;
+      ctx.fillStyle = isHovered ? '#f8f9fa' : '#ffffff';
+      ctx.strokeStyle = isSelected ? '#3498db' : (isHovered ? '#74b9ff' : (arrow.label ? '#dee2e6' : '#e74c3c')); // Enhanced border for hover/selection
+      ctx.lineWidth = (isSelected ? 2 : (isHovered ? 1.5 : (arrow.label ? 1 : 2))) * canvasState.zoom;
 
       const fontSize = 12 * canvasState.zoom;
       const font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif`;
@@ -223,6 +228,26 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
       const padding = 6 * canvasState.zoom;
       const labelWidth = Math.max(metrics.width + padding * 2, 24 * canvasState.zoom); // Minimum width for empty labels
       const labelHeight = 24 * canvasState.zoom;
+
+      // Convert screen path back to canvas coordinates for label positioning
+      const canvasPath = path.map(point => ({
+        x: (point.x - canvasState.panOffset.x) / canvasState.zoom,
+        y: (point.y - canvasState.panOffset.y) / canvasState.zoom
+      }));
+
+      // Find optimal label position with collision avoidance
+      const canvasLabelPos = CanvasUtils.findOptimalLabelPosition(
+        canvasPath,
+        labelWidth / canvasState.zoom,
+        labelHeight / canvasState.zoom,
+        flashcard.sides,
+        flashcard.arrows,
+        arrow,
+        flashcard.sides
+      );
+
+      // Convert back to screen coordinates
+      const labelPos = CanvasUtils.canvasToScreen(canvasLabelPos, canvasState);
 
       const labelRect = {
         x: labelPos.x - labelWidth / 2,
@@ -241,7 +266,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
         ctx.fillText(arrow.label, labelPos.x, labelPos.y);
       }
     }
-  }, [calculateArrowPath, canvasState.selectedArrowIds, arrowEditing]);
+  }, [calculateArrowPath, canvasState.selectedArrowIds, arrowEditing, hoverArrowId]);
 
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -395,8 +420,8 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
         const inputRect = new DOMRect(
           rect.left + screenPos.x,
           rect.top + screenPos.y,
-          side.width || SIDE_WIDTH,
-          side.height || SIDE_HEIGHT
+          (side.width || SIDE_WIDTH) * canvasState.zoom,
+          (side.height || SIDE_HEIGHT) * canvasState.zoom
         );
 
         setEditing({
@@ -420,14 +445,31 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
         const canvas = canvasRef.current;
         const rect = canvas.getBoundingClientRect();
 
-        // Calculate arrow midpoint for label position
+        // Calculate optimal arrow label position with collision avoidance
         const path = calculateArrowPath(arrow);
         if (path.length >= 2) {
-          const midIndex = Math.floor(path.length / 2);
-          const labelPos = path[midIndex];
+          const labelWidth = Math.max(100 * canvasState.zoom, 24 * canvasState.zoom); // Minimum width for input
+          const labelHeight = 24 * canvasState.zoom;
 
-          const labelWidth = Math.max(100, 24); // Minimum width for input
-          const labelHeight = 24;
+          // Convert screen path back to canvas coordinates for label positioning
+          const canvasPath = path.map(point => ({
+            x: (point.x - canvasState.panOffset.x) / canvasState.zoom,
+            y: (point.y - canvasState.panOffset.y) / canvasState.zoom
+          }));
+
+          // Find optimal label position with collision avoidance
+          const canvasLabelPos = CanvasUtils.findOptimalLabelPosition(
+            canvasPath,
+            labelWidth / canvasState.zoom,
+            labelHeight / canvasState.zoom,
+            flashcard.sides,
+            flashcard.arrows,
+            arrow,
+            flashcard.sides
+          );
+
+          // Convert back to screen coordinates
+          const labelPos = CanvasUtils.canvasToScreen(canvasLabelPos, canvasState);
 
           const inputRect = new DOMRect(
             rect.left + labelPos.x - labelWidth / 2,
@@ -449,6 +491,71 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
       }
     }
   }, [newArrowForEditing, flashcard.arrows, canvasState, calculateArrowPath, onEditingComplete]);
+
+  // Update input rects when zoom changes
+  useEffect(() => {
+    // Update side editing input rect
+    if (editing.sideId && canvasRef.current) {
+      const side = flashcard.sides.find(s => s.id === editing.sideId);
+      if (side) {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const screenPos = CanvasUtils.canvasToScreen(side.position, canvasState);
+        const inputRect = new DOMRect(
+          rect.left + screenPos.x,
+          rect.top + screenPos.y,
+          (side.width || SIDE_WIDTH) * canvasState.zoom,
+          (side.height || SIDE_HEIGHT) * canvasState.zoom
+        );
+        setEditing(prev => ({ ...prev, inputRect }));
+      }
+    }
+
+    // Update arrow editing input rect
+    if (arrowEditing.arrowId && canvasRef.current) {
+      const arrow = flashcard.arrows.find(a => a.id === arrowEditing.arrowId);
+      if (arrow) {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const path = calculateArrowPath(arrow);
+        if (path.length >= 2) {
+          const ctx = canvas.getContext('2d');
+          const labelWidth = ctx && arrow.label
+            ? Math.max((ctx.measureText(arrow.label).width + 20) * canvasState.zoom, 60 * canvasState.zoom)
+            : 100 * canvasState.zoom;
+          const labelHeight = 24 * canvasState.zoom;
+
+          // Convert screen path back to canvas coordinates for label positioning
+          const canvasPath = path.map(point => ({
+            x: (point.x - canvasState.panOffset.x) / canvasState.zoom,
+            y: (point.y - canvasState.panOffset.y) / canvasState.zoom
+          }));
+
+          // Find optimal label position with collision avoidance
+          const canvasLabelPos = CanvasUtils.findOptimalLabelPosition(
+            canvasPath,
+            labelWidth / canvasState.zoom,
+            labelHeight / canvasState.zoom,
+            flashcard.sides,
+            flashcard.arrows,
+            arrow,
+            flashcard.sides
+          );
+
+          // Convert back to screen coordinates
+          const labelPos = CanvasUtils.canvasToScreen(canvasLabelPos, canvasState);
+
+          const inputRect = new DOMRect(
+            rect.left + labelPos.x - labelWidth / 2,
+            rect.top + labelPos.y - labelHeight / 2,
+            labelWidth,
+            labelHeight
+          );
+          setArrowEditing(prev => ({ ...prev, inputRect }));
+        }
+      }
+    }
+  }, [canvasState.zoom, canvasState.panOffset, flashcard.sides, flashcard.arrows, calculateArrowPath, editing.sideId, arrowEditing.arrowId, SIDE_WIDTH, SIDE_HEIGHT]);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     event.preventDefault();
@@ -554,6 +661,16 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
     const hoveredSide = findSideAtPosition(canvasPos);
     setHoverSideId(hoveredSide?.id || null);
 
+    // Check for arrow hover if no side is hovered
+    if (!hoveredSide) {
+      const hoveredArrow = flashcard.arrows.find(arrow =>
+        CanvasUtils.isPointNearArrow(canvasPos, arrow, flashcard.sides, flashcard.arrows, 15)
+      );
+      setHoverArrowId(hoveredArrow?.id || null);
+    } else {
+      setHoverArrowId(null);
+    }
+
     if (isDragging && dragSideId && dragOffset) {
       const side = flashcard.sides.find(s => s.id === dragSideId);
       if (side) {
@@ -632,8 +749,8 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
         const inputRect = new DOMRect(
           rect.left + screenPos.x,
           rect.top + screenPos.y,
-          (clickedSide.width || SIDE_WIDTH),
-          (clickedSide.height || SIDE_HEIGHT)
+          (clickedSide.width || SIDE_WIDTH) * canvasState.zoom,
+          (clickedSide.height || SIDE_HEIGHT) * canvasState.zoom
         );
 
         setEditing({
@@ -647,17 +764,34 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
       if (canvas) {
         const rect = canvas.getBoundingClientRect();
 
-        // Calculate arrow midpoint for label position
+        // Calculate optimal arrow label position with collision avoidance
         const path = calculateArrowPath(clickedArrow);
         if (path.length >= 2) {
-          const midIndex = Math.floor(path.length / 2);
-          const labelPos = path[midIndex];
-
           const ctx = canvas.getContext('2d');
           const labelWidth = ctx && clickedArrow.label
-            ? Math.max(ctx.measureText(clickedArrow.label).width + 20, 60)
-            : 100;
-          const labelHeight = 24;
+            ? Math.max((ctx.measureText(clickedArrow.label).width + 20) * canvasState.zoom, 60 * canvasState.zoom)
+            : 100 * canvasState.zoom;
+          const labelHeight = 24 * canvasState.zoom;
+
+          // Convert screen path back to canvas coordinates for label positioning
+          const canvasPath = path.map(point => ({
+            x: (point.x - canvasState.panOffset.x) / canvasState.zoom,
+            y: (point.y - canvasState.panOffset.y) / canvasState.zoom
+          }));
+
+          // Find optimal label position with collision avoidance
+          const canvasLabelPos = CanvasUtils.findOptimalLabelPosition(
+            canvasPath,
+            labelWidth / canvasState.zoom,
+            labelHeight / canvasState.zoom,
+            flashcard.sides,
+            flashcard.arrows,
+            clickedArrow,
+            flashcard.sides
+          );
+
+          // Convert back to screen coordinates
+          const labelPos = CanvasUtils.canvasToScreen(canvasLabelPos, canvasState);
 
           const inputRect = new DOMRect(
             rect.left + labelPos.x - labelWidth / 2,
@@ -679,22 +813,38 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   // Keyboard event handling
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't handle keyboard events if user is typing in an input field
+      if (editing.sideId || arrowEditing.arrowId) {
+        if (event.key === 'Escape') {
+          if (editing.sideId) {
+            setEditing({ sideId: null, text: '', inputRect: null });
+          }
+          if (arrowEditing.arrowId) {
+            setArrowEditing({ arrowId: null, text: '', inputRect: null });
+          }
+        }
+        return;
+      }
+
       if (event.key === 'Escape') {
         if (canvasState.isCreatingArrow) {
           onCanvasClick({ x: 0, y: 0 }); // Cancel arrow creation
         }
-        if (editing.sideId) {
-          setEditing({ sideId: null, text: '', inputRect: null });
-        }
-        if (arrowEditing.arrowId) {
-          setArrowEditing({ arrowId: null, text: '', inputRect: null });
+      } else if (event.key === 'Backspace' || event.key === 'Delete') {
+        // Delete selected sides (and their connected arrows) or selected arrows
+        if (canvasState.selectedSideIds.length > 0) {
+          event.preventDefault(); // Prevent browser back navigation
+          onSideDelete(canvasState.selectedSideIds);
+        } else if (canvasState.selectedArrowIds.length > 0) {
+          event.preventDefault(); // Prevent browser back navigation
+          onArrowDelete(canvasState.selectedArrowIds);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canvasState.isCreatingArrow, editing.sideId, arrowEditing.arrowId, onCanvasClick]);
+  }, [canvasState.isCreatingArrow, canvasState.selectedSideIds, canvasState.selectedArrowIds, editing.sideId, arrowEditing.arrowId, onCanvasClick, onSideDelete, onArrowDelete]);
 
   const getCanvasClassName = () => {
     const baseClass = 'flashcard-canvas';
@@ -743,7 +893,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
             border: '2px solid #3498db',
             borderRadius: '2px',
             padding: '4px',
-            fontSize: '14px',
+            fontSize: `${14 * canvasState.zoom}px`,
             textAlign: 'center',
             zIndex: 1001,
             background: 'white'
@@ -779,7 +929,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
             border: '2px solid #3498db',
             borderRadius: '2px',
             padding: '4px',
-            fontSize: '12px',
+            fontSize: `${12 * canvasState.zoom}px`,
             textAlign: 'center',
             zIndex: 1001,
             background: 'white'
