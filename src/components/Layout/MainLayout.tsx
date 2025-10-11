@@ -638,6 +638,9 @@ export const MainLayout: React.FC = () => {
           onClose={() => setShowFileManager(false)}
           onFileOpened={(filePath, set) => {
             setCurrentFilePath(filePath);
+            // Clear canvas selections when opening a new file
+            canvasDispatch({ type: 'CLEAR_SELECTION' });
+            canvasDispatch({ type: 'FINISH_ARROW_CREATION' });
             // Set saved state when file is opened
             const state = JSON.stringify({
               set,

@@ -1,7 +1,22 @@
-// Phase 2: Tauri File Service - Implementation complete
+// Phase 2: Tauri File Service - Implementation complete with web fallback
 import { FlashcardSet, FlashcardTemplate, FileMetadata } from '../types';
-import { open, save } from '@tauri-apps/plugin-dialog';
-import { readTextFile, writeTextFile, stat } from '@tauri-apps/plugin-fs';
+
+// Check if we're running in Tauri environment
+const isTauri = () => {
+  return typeof window !== 'undefined' && '__TAURI__' in window;
+};
+
+// Dynamic imports for Tauri APIs
+const getTauriAPI = async () => {
+  if (!isTauri()) {
+    throw new Error('File operations are only available in the desktop app. Please run with "npm run tauri:dev" or use the built desktop application.');
+  }
+
+  const { open, save } = await import('@tauri-apps/plugin-dialog');
+  const { readTextFile, writeTextFile, stat } = await import('@tauri-apps/plugin-fs');
+
+  return { open, save, readTextFile, writeTextFile, stat };
+};
 
 export class TauriFileService {
   private static readonly RECENT_FILES_KEY = 'extended-flashcards-recent-files';
@@ -9,6 +24,8 @@ export class TauriFileService {
 
   static async openFlashcardSet(): Promise<{ set: FlashcardSet; filePath: string } | null> {
     try {
+      const { open, readTextFile } = await getTauriAPI();
+
       const filePath = await open({
         title: 'Open Flashcard Set',
         filters: [{ name: 'Flashcard Sets', extensions: ['json'] }],
@@ -27,21 +44,14 @@ export class TauriFileService {
       return { set: data, filePath: filePath as string };
     } catch (error) {
       console.error('Error opening flashcard set:', error);
-
-      // Convert Tauri-specific errors to user-friendly messages
-      if (error && typeof error === 'object' && 'message' in error) {
-        const errorMessage = (error as Error).message;
-        if (errorMessage.includes('invoke') || errorMessage.includes('__TAURI__') || errorMessage.includes('not available')) {
-          throw new Error('File operations are only available in the desktop app. Please run with "npm run tauri:dev" or use the built desktop application.');
-        }
-      }
-
       throw error;
     }
   }
 
   static async openFlashcardSetByPath(filePath: string): Promise<FlashcardSet> {
     try {
+      const { readTextFile } = await getTauriAPI();
+
       const content = await readTextFile(filePath);
       const data = JSON.parse(content);
 
@@ -59,6 +69,7 @@ export class TauriFileService {
 
   static async saveFlashcardSet(set: FlashcardSet, filePath?: string): Promise<string> {
     try {
+      const { save, writeTextFile } = await getTauriAPI();
       let targetPath = filePath;
 
       if (!targetPath) {
@@ -85,21 +96,14 @@ export class TauriFileService {
       return targetPath;
     } catch (error) {
       console.error('Error saving flashcard set:', error);
-
-      // Convert Tauri-specific errors to user-friendly messages
-      if (error && typeof error === 'object' && 'message' in error) {
-        const errorMessage = (error as Error).message;
-        if (errorMessage.includes('invoke') || errorMessage.includes('__TAURI__') || errorMessage.includes('not available')) {
-          throw new Error('File operations are only available in the desktop app. Please run with "npm run tauri:dev" or use the built desktop application.');
-        }
-      }
-
       throw error;
     }
   }
 
   static async openTemplate(): Promise<FlashcardTemplate | null> {
     try {
+      const { open, readTextFile } = await getTauriAPI();
+
       const filePath = await open({
         title: 'Open Flashcard Template',
         filters: [{ name: 'Flashcard Templates', extensions: ['json'] }],
@@ -124,6 +128,7 @@ export class TauriFileService {
 
   static async saveTemplate(template: FlashcardTemplate, filePath?: string): Promise<string> {
     try {
+      const { save, writeTextFile } = await getTauriAPI();
       let targetPath = filePath;
 
       if (!targetPath) {
@@ -167,9 +172,12 @@ export class TauriFileService {
       let fileSize = 0;
       let lastModified = new Date();
       try {
-        const fileStats = await stat(filePath);
-        fileSize = fileStats.size || 0;
-        lastModified = fileStats.mtime || new Date();
+        if (isTauri()) {
+          const { stat } = await getTauriAPI();
+          const fileStats = await stat(filePath);
+          fileSize = fileStats.size || 0;
+          lastModified = fileStats.mtime || new Date();
+        }
       } catch (statError) {
         console.warn('Could not get file stats:', statError);
       }

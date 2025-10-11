@@ -51,8 +51,16 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened 
 
       if (set) {
         dispatch({ type: 'SET_CURRENT_SET', payload: set });
+        dispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
         if (set.flashcards.length > 0) {
           dispatch({ type: 'SET_CURRENT_FLASHCARD', payload: set.flashcards[0] });
+        } else {
+          // Clear current flashcard if the loaded set is empty
+          if (openedFilePath && onFileOpened) {
+            onFileOpened(openedFilePath, set);
+          }
+          onClose();
+          return;
         }
         if (openedFilePath && onFileOpened) {
           onFileOpened(openedFilePath, set);
