@@ -199,6 +199,7 @@ export const MainLayout: React.FC = () => {
         const newSet = TauriFileService.createNewSet();
         appDispatch({ type: 'SET_CURRENT_SET', payload: newSet });
         appDispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
+        appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: null });
         setCurrentFilePath(null);
         setLastSavedState(null);
         setHasUnsavedChanges(true);

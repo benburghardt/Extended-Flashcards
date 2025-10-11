@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { FileMetadata } from '../../types';
 import { TauriFileService } from '../../services/TauriFileService';
+import { isWeb } from '../../utils/environmentDetection';
 
 interface FileManagerProps {
   onClose: () => void;
@@ -21,7 +22,9 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened 
   const loadRecentFiles = async () => {
     try {
       const files = await TauriFileService.getRecentFiles();
-      setRecentFiles(files);
+      // In web version, don't show recent files since they can't be opened by path
+      const isWebEnvironment = await isWeb();
+      setRecentFiles(isWebEnvironment ? [] : files);
     } catch (err) {
       console.error('Error loading recent files:', err);
       setError('Failed to load recent files');
@@ -52,16 +55,15 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened 
       if (set) {
         dispatch({ type: 'SET_CURRENT_SET', payload: set });
         dispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
+
+        // Always clear current flashcard first, then set the new one if available
+        dispatch({ type: 'SET_CURRENT_FLASHCARD', payload: null });
+
         if (set.flashcards.length > 0) {
           dispatch({ type: 'SET_CURRENT_FLASHCARD', payload: set.flashcards[0] });
-        } else {
-          // Clear current flashcard if the loaded set is empty
-          if (openedFilePath && onFileOpened) {
-            onFileOpened(openedFilePath, set);
-          }
-          onClose();
-          return;
         }
+
+        // Call the onFileOpened callback to update file path and other state
         if (openedFilePath && onFileOpened) {
           onFileOpened(openedFilePath, set);
         }
@@ -79,6 +81,8 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened 
     const newSet = TauriFileService.createNewSet();
     dispatch({ type: 'SET_CURRENT_SET', payload: newSet });
     dispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
+    // Clear current flashcard when creating a new set
+    dispatch({ type: 'SET_CURRENT_FLASHCARD', payload: null });
     onClose();
   };
 

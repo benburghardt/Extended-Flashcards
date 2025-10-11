@@ -8,7 +8,7 @@ interface AppContextType {
 
 type AppAction =
   | { type: 'SET_CURRENT_SET'; payload: FlashcardSet }
-  | { type: 'SET_CURRENT_FLASHCARD'; payload: Flashcard }
+  | { type: 'SET_CURRENT_FLASHCARD'; payload: Flashcard | null }
   | { type: 'SET_EDIT_MODE'; payload: 'view' | 'edit' | 'study' }
   | { type: 'SET_SELECTED_TOOL'; payload: CanvasTool }
   | { type: 'START_STUDY_SESSION'; payload: StudySession }

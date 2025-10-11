@@ -1,16 +1,67 @@
 // Phase 2: Tauri File Service - Implementation complete with web fallback
 import { FlashcardSet, FlashcardTemplate, FileMetadata } from '../types';
+import { detectEnvironment } from '../utils/environmentDetection';
 
-// Dynamic imports for Tauri APIs with better detection
-const getTauriAPI = async () => {
-  try {
-    const { open, save } = await import('@tauri-apps/plugin-dialog');
-    const { readTextFile, writeTextFile, stat } = await import('@tauri-apps/plugin-fs');
+// Web File API fallback functions
+const webFileAPI = {
+  async open() {
+    return new Promise<{ name: string; content: string }>((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            resolve({
+              name: file.name,
+              content: reader.result as string
+            });
+          };
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsText(file);
+        } else {
+          reject(new Error('No file selected'));
+        }
+      };
+      input.click();
+    });
+  },
 
-    return { open, save, readTextFile, writeTextFile, stat };
-  } catch (error) {
-    throw new Error('File operations are only available in the desktop app. Please run with "npm run tauri:dev" or use the built desktop application.');
+  async save(filename: string, content: string) {
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return filename;
   }
+};
+
+// Dynamic imports for Tauri APIs with web fallback
+const getTauriAPI = async () => {
+  const environment = await detectEnvironment();
+
+  if (environment === 'desktop') {
+    try {
+      const { open, save } = await import('@tauri-apps/plugin-dialog');
+      const { readTextFile, writeTextFile, stat } = await import('@tauri-apps/plugin-fs');
+
+      return { open, save, readTextFile, writeTextFile, stat };
+    } catch (error) {
+      // Even in desktop environment, imports might fail
+      console.warn('Failed to load Tauri APIs in desktop environment:', error);
+      return null;
+    }
+  }
+
+  // Web environment - return null immediately without attempting imports
+  return null;
 };
 
 // Note: Environment detection is now handled by getTauriAPI() directly
@@ -21,24 +72,41 @@ export class TauriFileService {
 
   static async openFlashcardSet(): Promise<{ set: FlashcardSet; filePath: string } | null> {
     try {
-      const { open, readTextFile } = await getTauriAPI();
+      const tauriAPI = await getTauriAPI();
 
-      const filePath = await open({
-        title: 'Open Flashcard Set',
-        filters: [{ name: 'Flashcard Sets', extensions: ['json'] }],
-      });
+      if (tauriAPI) {
+        // Desktop/Tauri version
+        const { open, readTextFile } = tauriAPI;
 
-      if (!filePath) return null;
+        const filePath = await open({
+          title: 'Open Flashcard Set',
+          filters: [{ name: 'Flashcard Sets', extensions: ['json'] }],
+        });
 
-      const content = await readTextFile(filePath as string);
-      const data = JSON.parse(content);
+        if (!filePath) return null;
 
-      if (!this.validateFlashcardSet(data)) {
-        throw new Error('Invalid flashcard set file format');
+        const content = await readTextFile(filePath as string);
+        const data = JSON.parse(content);
+
+        if (!this.validateFlashcardSet(data)) {
+          throw new Error('Invalid flashcard set file format');
+        }
+
+        await this.addToRecentFiles(filePath as string, 'set');
+        return { set: data, filePath: filePath as string };
+      } else {
+        // Web version fallback
+        const result = await webFileAPI.open();
+        const data = JSON.parse(result.content);
+
+        if (!this.validateFlashcardSet(data)) {
+          throw new Error('Invalid flashcard set file format');
+        }
+
+        // For web version, use filename as the "path"
+        const webFilePath = result.name;
+        return { set: data, filePath: webFilePath };
       }
-
-      await this.addToRecentFiles(filePath as string, 'set');
-      return { set: data, filePath: filePath as string };
     } catch (error) {
       console.error('Error opening flashcard set:', error);
       throw error;
@@ -47,17 +115,24 @@ export class TauriFileService {
 
   static async openFlashcardSetByPath(filePath: string): Promise<FlashcardSet> {
     try {
-      const { readTextFile } = await getTauriAPI();
+      const tauriAPI = await getTauriAPI();
 
-      const content = await readTextFile(filePath);
-      const data = JSON.parse(content);
+      if (tauriAPI) {
+        // Desktop/Tauri version
+        const { readTextFile } = tauriAPI;
+        const content = await readTextFile(filePath);
+        const data = JSON.parse(content);
 
-      if (!this.validateFlashcardSet(data)) {
-        throw new Error('Invalid flashcard set file format');
+        if (!this.validateFlashcardSet(data)) {
+          throw new Error('Invalid flashcard set file format');
+        }
+
+        await this.addToRecentFiles(filePath, 'set');
+        return data;
+      } else {
+        // Web version - cannot open by path, throw error
+        throw new Error('Opening files by path is not supported in web version. Please use the file dialog.');
       }
-
-      await this.addToRecentFiles(filePath, 'set');
-      return data;
     } catch (error) {
       console.error('Error opening flashcard set by path:', error);
       throw error;
@@ -66,31 +141,40 @@ export class TauriFileService {
 
   static async saveFlashcardSet(set: FlashcardSet, filePath?: string): Promise<string> {
     try {
-      const { save, writeTextFile } = await getTauriAPI();
-      let targetPath = filePath;
-
-      if (!targetPath) {
-        const selectedPath = await save({
-          title: 'Save Flashcard Set',
-          defaultPath: `${set.name}.json`,
-          filters: [{ name: 'Flashcard Sets', extensions: ['json'] }],
-        });
-        targetPath = selectedPath || undefined;
-      }
-
-      if (!targetPath) throw new Error('Save cancelled');
+      const tauriAPI = await getTauriAPI();
 
       // Update modified timestamp
       const updatedSet = {
         ...set,
         modifiedAt: new Date()
       };
-
       const content = JSON.stringify(updatedSet, null, 2);
-      await writeTextFile(targetPath, content);
 
-      await this.addToRecentFiles(targetPath, 'set');
-      return targetPath;
+      if (tauriAPI) {
+        // Desktop/Tauri version
+        const { save, writeTextFile } = tauriAPI;
+        let targetPath = filePath;
+
+        if (!targetPath) {
+          const selectedPath = await save({
+            title: 'Save Flashcard Set',
+            defaultPath: `${set.name}.json`,
+            filters: [{ name: 'Flashcard Sets', extensions: ['json'] }],
+          });
+          targetPath = selectedPath || undefined;
+        }
+
+        if (!targetPath) throw new Error('Save cancelled');
+
+        await writeTextFile(targetPath, content);
+        await this.addToRecentFiles(targetPath, 'set');
+        return targetPath;
+      } else {
+        // Web version fallback
+        const filename = filePath || `${set.name}.json`;
+        await webFileAPI.save(filename, content);
+        return filename;
+      }
     } catch (error) {
       console.error('Error saving flashcard set:', error);
       throw error;
@@ -99,24 +183,39 @@ export class TauriFileService {
 
   static async openTemplate(): Promise<FlashcardTemplate | null> {
     try {
-      const { open, readTextFile } = await getTauriAPI();
+      const tauriAPI = await getTauriAPI();
 
-      const filePath = await open({
-        title: 'Open Flashcard Template',
-        filters: [{ name: 'Flashcard Templates', extensions: ['json'] }],
-      });
+      if (tauriAPI) {
+        // Desktop/Tauri version
+        const { open, readTextFile } = tauriAPI;
 
-      if (!filePath) return null;
+        const filePath = await open({
+          title: 'Open Flashcard Template',
+          filters: [{ name: 'Flashcard Templates', extensions: ['json'] }],
+        });
 
-      const content = await readTextFile(filePath as string);
-      const data = JSON.parse(content);
+        if (!filePath) return null;
 
-      if (!this.validateTemplate(data)) {
-        throw new Error('Invalid template file format');
+        const content = await readTextFile(filePath as string);
+        const data = JSON.parse(content);
+
+        if (!this.validateTemplate(data)) {
+          throw new Error('Invalid template file format');
+        }
+
+        await this.addToRecentFiles(filePath as string, 'template');
+        return data;
+      } else {
+        // Web version fallback
+        const result = await webFileAPI.open();
+        const data = JSON.parse(result.content);
+
+        if (!this.validateTemplate(data)) {
+          throw new Error('Invalid template file format');
+        }
+
+        return data;
       }
-
-      await this.addToRecentFiles(filePath as string, 'template');
-      return data;
     } catch (error) {
       console.error('Error opening template:', error);
       throw error;
@@ -125,25 +224,36 @@ export class TauriFileService {
 
   static async saveTemplate(template: FlashcardTemplate, filePath?: string): Promise<string> {
     try {
-      const { save, writeTextFile } = await getTauriAPI();
-      let targetPath = filePath;
+      const tauriAPI = await getTauriAPI();
 
-      if (!targetPath) {
-        const selectedPath = await save({
-          title: 'Save Flashcard Template',
-          defaultPath: `${template.name}.json`,
-          filters: [{ name: 'Flashcard Templates', extensions: ['json'] }],
-        });
-        targetPath = selectedPath || undefined;
+      if (tauriAPI) {
+        // Desktop/Tauri version
+        const { save, writeTextFile } = tauriAPI;
+        let targetPath = filePath;
+
+        if (!targetPath) {
+          const selectedPath = await save({
+            title: 'Save Flashcard Template',
+            defaultPath: `${template.name}.json`,
+            filters: [{ name: 'Flashcard Templates', extensions: ['json'] }],
+          });
+          targetPath = selectedPath || undefined;
+        }
+
+        if (!targetPath) throw new Error('Save cancelled');
+
+        const content = JSON.stringify(template, null, 2);
+        await writeTextFile(targetPath, content);
+
+        await this.addToRecentFiles(targetPath, 'template');
+        return targetPath;
+      } else {
+        // Web version fallback
+        const filename = filePath || `${template.name}.json`;
+        const content = JSON.stringify(template, null, 2);
+        await webFileAPI.save(filename, content);
+        return filename;
       }
-
-      if (!targetPath) throw new Error('Save cancelled');
-
-      const content = JSON.stringify(template, null, 2);
-      await writeTextFile(targetPath, content);
-
-      await this.addToRecentFiles(targetPath, 'template');
-      return targetPath;
     } catch (error) {
       console.error('Error saving template:', error);
       throw error;
@@ -169,10 +279,13 @@ export class TauriFileService {
       let fileSize = 0;
       let lastModified = new Date();
       try {
-        const { stat } = await getTauriAPI();
-        const fileStats = await stat(filePath);
-        fileSize = fileStats.size || 0;
-        lastModified = fileStats.mtime || new Date();
+        const tauriAPI = await getTauriAPI();
+        if (tauriAPI) {
+          const { stat } = tauriAPI;
+          const fileStats = await stat(filePath);
+          fileSize = fileStats.size || 0;
+          lastModified = fileStats.mtime || new Date();
+        }
       } catch (statError) {
         // Silently fail for web environment or stat errors
         console.debug('Could not get file stats (likely web environment):', statError);
