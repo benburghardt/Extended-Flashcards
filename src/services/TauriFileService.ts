@@ -1,22 +1,19 @@
 // Phase 2: Tauri File Service - Implementation complete with web fallback
 import { FlashcardSet, FlashcardTemplate, FileMetadata } from '../types';
 
-// Check if we're running in Tauri environment
-const isTauri = () => {
-  return typeof window !== 'undefined' && '__TAURI__' in window;
-};
-
-// Dynamic imports for Tauri APIs
+// Dynamic imports for Tauri APIs with better detection
 const getTauriAPI = async () => {
-  if (!isTauri()) {
+  try {
+    const { open, save } = await import('@tauri-apps/plugin-dialog');
+    const { readTextFile, writeTextFile, stat } = await import('@tauri-apps/plugin-fs');
+
+    return { open, save, readTextFile, writeTextFile, stat };
+  } catch (error) {
     throw new Error('File operations are only available in the desktop app. Please run with "npm run tauri:dev" or use the built desktop application.');
   }
-
-  const { open, save } = await import('@tauri-apps/plugin-dialog');
-  const { readTextFile, writeTextFile, stat } = await import('@tauri-apps/plugin-fs');
-
-  return { open, save, readTextFile, writeTextFile, stat };
 };
+
+// Note: Environment detection is now handled by getTauriAPI() directly
 
 export class TauriFileService {
   private static readonly RECENT_FILES_KEY = 'extended-flashcards-recent-files';
@@ -172,14 +169,13 @@ export class TauriFileService {
       let fileSize = 0;
       let lastModified = new Date();
       try {
-        if (isTauri()) {
-          const { stat } = await getTauriAPI();
-          const fileStats = await stat(filePath);
-          fileSize = fileStats.size || 0;
-          lastModified = fileStats.mtime || new Date();
-        }
+        const { stat } = await getTauriAPI();
+        const fileStats = await stat(filePath);
+        fileSize = fileStats.size || 0;
+        lastModified = fileStats.mtime || new Date();
       } catch (statError) {
-        console.warn('Could not get file stats:', statError);
+        // Silently fail for web environment or stat errors
+        console.debug('Could not get file stats (likely web environment):', statError);
       }
 
       const newFile: FileMetadata = {
