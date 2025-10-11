@@ -94,7 +94,7 @@ export interface StudyQuestion {
 
 export interface AppState {
   currentSet?: FlashcardSet;
-  currentFlashcard?: Flashcard;
+  currentFlashcard?: Flashcard | null;
   editMode: 'view' | 'edit' | 'study';
   selectedTool: CanvasTool;
   studySession?: StudySession;
