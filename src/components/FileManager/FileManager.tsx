@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { FileMetadata, FlashcardSet } from '../../types';
+import { FileMetadata } from '../../types';
 import { TauriFileService } from '../../services/TauriFileService';
 
 interface FileManagerProps {
   onClose: () => void;
+  onFileOpened?: (filePath: string, set: any) => void;
 }
 
-export const FileManager: React.FC<FileManagerProps> = ({ onClose }) => {
+export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened }) => {
   const { dispatch } = useApp();
   const [recentFiles, setRecentFiles] = useState<FileMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,16 +28,34 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose }) => {
     }
   };
 
-  const handleOpenFile = async (filePath?: string) => {
+  const handleOpenFile = async (specificFilePath?: string) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const set = await TauriFileService.openFlashcardSet();
+      let set;
+      let openedFilePath;
+
+      if (specificFilePath) {
+        // Open specific file by path (from recent files)
+        set = await TauriFileService.openFlashcardSetByPath(specificFilePath);
+        openedFilePath = specificFilePath;
+      } else {
+        // Open file via dialog
+        const result = await TauriFileService.openFlashcardSet();
+        if (result) {
+          set = result.set;
+          openedFilePath = result.filePath;
+        }
+      }
+
       if (set) {
         dispatch({ type: 'SET_CURRENT_SET', payload: set });
         if (set.flashcards.length > 0) {
           dispatch({ type: 'SET_CURRENT_FLASHCARD', payload: set.flashcards[0] });
+        }
+        if (openedFilePath && onFileOpened) {
+          onFileOpened(openedFilePath, set);
         }
         onClose();
       }
@@ -49,16 +68,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose }) => {
   };
 
   const handleCreateNew = () => {
-    const newSet: FlashcardSet = {
-      id: `set-${Date.now()}`,
-      name: 'New Flashcard Set',
-      description: '',
-      flashcards: [],
-      createdAt: new Date(),
-      modifiedAt: new Date(),
-      version: '1.0.0',
-    };
-
+    const newSet = TauriFileService.createNewSet();
     dispatch({ type: 'SET_CURRENT_SET', payload: newSet });
     dispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
     onClose();

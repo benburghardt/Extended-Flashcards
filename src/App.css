@@ -117,6 +117,35 @@ html, body {
   background: #2980b9;
 }
 
+.environment-warning {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  max-width: 500px;
+}
+
+.environment-warning h3 {
+  color: #856404;
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+}
+
+.environment-warning p {
+  color: #856404;
+  margin: 0.5rem 0;
+  font-size: 1rem;
+}
+
+.environment-warning code {
+  background: #6c757d;
+  color: white;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+}
+
 /* Empty Set Screen */
 .empty-set {
   display: flex;
@@ -576,4 +605,95 @@ html, body {
 
 .arrow-label-buttons button:hover {
   background: #5a6268;
+}
+
+/* Error Banner */
+.error-banner {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 1rem;
+  border-bottom: 1px solid #f5c6cb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.error-banner button {
+  background: none;
+  border: none;
+  color: #721c24;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.error-banner button:hover {
+  background: rgba(114, 28, 36, 0.1);
+}
+
+/* Save Button States */
+.save-button,
+.save-as-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  min-width: 80px;
+}
+
+.save-button:hover:not(:disabled),
+.save-as-button:hover:not(:disabled) {
+  background: #218838;
+}
+
+.save-button:disabled,
+.save-as-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.save-as-button {
+  background: #6c757d;
+}
+
+.save-as-button:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+/* Current Set Name */
+.current-set {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-left: 1rem;
+  font-size: 1rem;
+}
+
+/* Auto-save indicator */
+.auto-save-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #28a745;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 1000;
+}
+
+.auto-save-indicator.visible {
+  opacity: 1;
 }

@@ -1,5 +1,5 @@
 // Phase 3: Study Mode Generator - Complete but not yet integrated
-import { StudyQuestion, Flashcard, Arrow, StudyMode, FlashcardSide } from '../types';
+import { StudyQuestion, Flashcard, Arrow, StudyMode } from '../types';
 
 export class StudyModeGenerator {
   static generateQuestions(

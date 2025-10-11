@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useCanvas } from '../../context/CanvasContext';
 import { FlashcardCanvas } from '../Canvas/FlashcardCanvas';
@@ -6,13 +6,222 @@ import { CanvasToolbar } from '../Toolbar/CanvasToolbar';
 import { StudyModeSelector } from '../Study/StudyModeSelector';
 import { FileManager } from '../FileManager/FileManager';
 import { StudyMode, FlashcardSide, Arrow, Flashcard } from '../../types';
+import { TauriFileService } from '../../services/TauriFileService';
 
 export const MainLayout: React.FC = () => {
   const { state: appState, dispatch: appDispatch } = useApp();
   const { state: canvasState, dispatch: canvasDispatch } = useCanvas();
   const [showFileManager, setShowFileManager] = useState(false);
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedState, setLastSavedState] = useState<string | null>(null);
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+  const getDisplayName = () => {
+    if (!appState.currentSet) return '';
+
+    let name = '';
+    if (currentFilePath) {
+      // Extract filename from path (handle both Windows and Unix paths)
+      const filename = currentFilePath.split(/[/\\]/).pop() || currentFilePath;
+      // Remove .json extension if present
+      name = filename.replace(/\.json$/, '');
+    } else {
+      name = appState.currentSet.name;
+    }
+
+    // Add asterisk for unsaved changes
+    return hasUnsavedChanges ? `${name} *` : name;
+  };
+
+  // Track changes to detect unsaved modifications
+  const checkForUnsavedChanges = useCallback(() => {
+    if (!appState.currentSet) {
+      setHasUnsavedChanges(false);
+      return;
+    }
+
+    const currentState = JSON.stringify({
+      set: appState.currentSet,
+      flashcard: appState.currentFlashcard
+    });
+
+    if (lastSavedState && currentState !== lastSavedState) {
+      setHasUnsavedChanges(true);
+
+      // Schedule auto-save
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        if (currentFilePath) {
+          handleAutoSave();
+        }
+      }, 30000); // Auto-save after 30 seconds of inactivity
+    } else if (!lastSavedState) {
+      // New file, mark as having changes
+      setHasUnsavedChanges(true);
+    }
+  }, [appState.currentSet, appState.currentFlashcard, lastSavedState, currentFilePath]);
+
+  // Save functions - declared early for use in useEffect dependencies
+  const handleSave = useCallback(async () => {
+    if (!appState.currentSet) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const filePath = await TauriFileService.saveFlashcardSet(appState.currentSet, currentFilePath || undefined);
+      setCurrentFilePath(filePath);
+
+      // Update saved state tracking
+      const newState = JSON.stringify({
+        set: appState.currentSet,
+        flashcard: appState.currentFlashcard
+      });
+      setLastSavedState(newState);
+      setHasUnsavedChanges(false);
+
+      // Clear auto-save timeout since we just saved
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+
+      console.log('Flashcard set saved successfully');
+    } catch (error) {
+      console.error('Error saving flashcard set:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to save flashcard set');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [appState.currentSet, appState.currentFlashcard, currentFilePath]);
+
+  const handleSaveAs = useCallback(async () => {
+    if (!appState.currentSet) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const filePath = await TauriFileService.saveFlashcardSet(appState.currentSet);
+      setCurrentFilePath(filePath);
+
+      // Update saved state tracking
+      const newState = JSON.stringify({
+        set: appState.currentSet,
+        flashcard: appState.currentFlashcard
+      });
+      setLastSavedState(newState);
+      setHasUnsavedChanges(false);
+
+      // Clear auto-save timeout since we just saved
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+
+      console.log('Flashcard set saved successfully');
+    } catch (error) {
+      console.error('Error saving flashcard set:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to save flashcard set');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [appState.currentSet, appState.currentFlashcard]);
+
+  // Auto-save function
+  const handleAutoSave = useCallback(async () => {
+    if (!appState.currentSet || !currentFilePath || isSaving) return;
+
+    try {
+      await TauriFileService.saveFlashcardSet(appState.currentSet, currentFilePath);
+      const newState = JSON.stringify({
+        set: appState.currentSet,
+        flashcard: appState.currentFlashcard
+      });
+      setLastSavedState(newState);
+      setHasUnsavedChanges(false);
+      console.log('Auto-saved successfully');
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+      // Don't show error for auto-save failures, just log them
+    }
+  }, [appState.currentSet, appState.currentFlashcard, currentFilePath, isSaving]);
+
+  // Watch for changes
+  useEffect(() => {
+    checkForUnsavedChanges();
+  }, [checkForUnsavedChanges]);
+
+  // Cleanup auto-save timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl+S (or Cmd+S on Mac)
+      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        if (appState.currentSet) {
+          handleSave();
+        }
+      }
+
+      // Ctrl+Shift+S for Save As
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'S') {
+        event.preventDefault();
+        if (appState.currentSet) {
+          handleSaveAs();
+        }
+      }
+
+      // Ctrl+O for Open
+      if ((event.ctrlKey || event.metaKey) && event.key === 'o') {
+        event.preventDefault();
+        setShowFileManager(true);
+      }
+
+      // Ctrl+N for New
+      if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
+        event.preventDefault();
+        const newSet = TauriFileService.createNewSet();
+        appDispatch({ type: 'SET_CURRENT_SET', payload: newSet });
+        appDispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
+        setCurrentFilePath(null);
+        setLastSavedState(null);
+        setHasUnsavedChanges(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [appState.currentSet, handleSave, handleSaveAs]);
+
+  // Warn before closing with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return event.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const handleToolSelect = (tool: string) => {
     appDispatch({ type: 'SET_SELECTED_TOOL', payload: tool as any });
@@ -318,7 +527,7 @@ export const MainLayout: React.FC = () => {
     if (!appState.currentFlashcard && appState.currentSet.flashcards.length === 0) {
       return (
         <div className="empty-set">
-          <h2>{appState.currentSet.name}</h2>
+          <h2>{getDisplayName()}</h2>
           <p>This set is empty. Create your first flashcard to get started.</p>
           <button onClick={handleCreateFlashcard}>
             Create First Flashcard
@@ -392,17 +601,52 @@ export const MainLayout: React.FC = () => {
             File Manager
           </button>
           {appState.currentSet && (
-            <span className="current-set">{appState.currentSet.name}</span>
+            <>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="save-button"
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={handleSaveAs}
+                disabled={isSaving}
+                className="save-as-button"
+              >
+                Save As...
+              </button>
+              <span className="current-set">{getDisplayName()}</span>
+            </>
           )}
         </div>
       </header>
+
+      {saveError && (
+        <div className="error-banner">
+          <span>Error saving file: {saveError}</span>
+          <button onClick={() => setSaveError(null)}>×</button>
+        </div>
+      )}
 
       <main className="app-main">
         {renderMainContent()}
       </main>
 
       {showFileManager && (
-        <FileManager onClose={() => setShowFileManager(false)} />
+        <FileManager
+          onClose={() => setShowFileManager(false)}
+          onFileOpened={(filePath, set) => {
+            setCurrentFilePath(filePath);
+            // Set saved state when file is opened
+            const state = JSON.stringify({
+              set,
+              flashcard: set.flashcards.length > 0 ? set.flashcards[0] : null
+            });
+            setLastSavedState(state);
+            setHasUnsavedChanges(false);
+          }}
+        />
       )}
 
     </div>
