@@ -144,8 +144,6 @@ export class CanvasUtils {
     return closestEdge as 'top' | 'bottom' | 'left' | 'right';
   }
 
-  // DEPRECATED: Replaced by getSideEdgeConnectionPoint with advanced distribution
-  // static getSideEdgePoint() - removed in Phase 1 cleanup
 
   private static distanceToLineSegment(
     point: Position,
@@ -384,8 +382,6 @@ export class CanvasUtils {
     return [sourcePoint, firstCorner, secondCorner, destPoint];
   }
 
-  // DEPRECATED: Simple arrow path replaced by calculateAdvancedArrowPath
-  // static calculateArrowPath() - removed in Phase 1 cleanup
 
   static drawGrid(
     ctx: CanvasRenderingContext2D,

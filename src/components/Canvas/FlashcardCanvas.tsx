@@ -282,7 +282,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
     }
 
     const rect = canvas.getBoundingClientRect();
-    console.log('Drawing canvas:', rect.width, 'x', rect.height);
+    // Debug: console.log('Drawing canvas:', rect.width, 'x', rect.height);
 
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
@@ -367,7 +367,7 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
       );
     }
 
-    console.log('Canvas draw complete. Sides:', flashcard.sides.length, 'Arrows:', flashcard.arrows.length);
+    // Debug: console.log('Canvas draw complete. Sides:', flashcard.sides.length, 'Arrows:', flashcard.arrows.length);
   }, [flashcard, canvasState, drawSide, drawArrow, mousePos]);
 
   const getCanvasPosition = useCallback((event: MouseEvent | React.MouseEvent): Position => {

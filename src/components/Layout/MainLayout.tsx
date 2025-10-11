@@ -496,12 +496,7 @@ export const MainLayout: React.FC = () => {
   };
 
   const renderMainContent = () => {
-    console.log('Rendering main content:', {
-      editMode: appState.editMode,
-      hasCurrentSet: !!appState.currentSet,
-      hasCurrentFlashcard: !!appState.currentFlashcard,
-      flashcardCount: appState.currentSet?.flashcards?.length || 0
-    });
+    // Debug: console.log('Rendering main content:', { editMode: appState.editMode, hasCurrentSet: !!appState.currentSet });
 
     if (appState.editMode === 'study' && appState.studySession) {
       return (
@@ -543,8 +538,8 @@ export const MainLayout: React.FC = () => {
           <CanvasToolbar
             selectedTool={appState.selectedTool}
             onToolSelect={handleToolSelect}
-            onUndo={() => console.log('Undo')}
-            onRedo={() => console.log('Redo')}
+            onUndo={() => {/* Phase 4: Undo implementation */}}
+            onRedo={() => {/* Phase 4: Redo implementation */}}
             onZoomIn={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.min(5, canvasState.zoom + 0.2) })}
             onZoomOut={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.max(0.1, canvasState.zoom - 0.2) })}
             onZoomReset={() => {
