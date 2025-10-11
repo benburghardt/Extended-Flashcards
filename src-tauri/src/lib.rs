@@ -13,6 +13,17 @@ pub fn run() {
       }
       Ok(())
     })
+    .on_window_event(|window, event| {
+      match event {
+        tauri::WindowEvent::CloseRequested { api, .. } => {
+          // Properly close the window and exit the app
+          window.close().unwrap();
+          // Exit the process cleanly to free up ports
+          std::process::exit(0);
+        }
+        _ => {}
+      }
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
