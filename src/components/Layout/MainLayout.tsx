@@ -4,19 +4,25 @@ import { useCanvas } from '../../context/CanvasContext';
 import { FlashcardCanvas } from '../Canvas/FlashcardCanvas';
 import { CanvasToolbar } from '../Toolbar/CanvasToolbar';
 import { StudyModeSelector } from '../Study/StudyModeSelector';
+import { StudySetup } from '../Study/StudySetup';
+import { StudySession } from '../Study/StudySession';
 import { FileManager } from '../FileManager/FileManager';
-import { StudyMode, FlashcardSide, Arrow, Flashcard } from '../../types';
+import { StudyMode, FlashcardSide, Arrow, Flashcard, StudySession as StudySessionType } from '../../types';
 import { TauriFileService } from '../../services/TauriFileService';
+import { ProgressService } from '../../services/ProgressService';
 
 export const MainLayout: React.FC = () => {
   const { state: appState, dispatch: appDispatch } = useApp();
   const { state: canvasState, dispatch: canvasDispatch } = useCanvas();
   const [showFileManager, setShowFileManager] = useState(false);
+  const [showStudySetup, setShowStudySetup] = useState(false);
+  const [selectedStudyMode, setSelectedStudyMode] = useState<StudyMode>('self-test');
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [lastSavedState, setLastSavedState] = useState<string | null>(null);
+  const [readyCardsCount, setReadyCardsCount] = useState(0);
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
@@ -159,6 +165,30 @@ export const MainLayout: React.FC = () => {
     checkForUnsavedChanges();
   }, [checkForUnsavedChanges]);
 
+  // Load and calculate ready cards count for spaced repetition
+  useEffect(() => {
+    const loadReadyCardsCount = async () => {
+      if (!appState.currentSet) {
+        setReadyCardsCount(0);
+        return;
+      }
+
+      try {
+        const progress = await ProgressService.loadProgress(
+          appState.currentSet.id,
+          currentFilePath || undefined
+        );
+        const count = ProgressService.getReadyCardsCount(progress);
+        setReadyCardsCount(count);
+      } catch (error) {
+        console.error('Error loading ready cards count:', error);
+        setReadyCardsCount(0);
+      }
+    };
+
+    loadReadyCardsCount();
+  }, [appState.currentSet, currentFilePath]);
+
   // Cleanup auto-save timeout on unmount
   useEffect(() => {
     return () => {
@@ -197,7 +227,7 @@ export const MainLayout: React.FC = () => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
         event.preventDefault();
         const newSet = TauriFileService.createNewSet();
-        appDispatch({ type: 'SET_CURRENT_SET', payload: newSet });
+        appDispatch({ type: 'SET_CURRENT_SET', payload: newSet, filePath: undefined });
         appDispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
         appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: null });
         setCurrentFilePath(null);
@@ -232,8 +262,20 @@ export const MainLayout: React.FC = () => {
   };
 
   const handleStudyModeSelect = (mode: StudyMode) => {
-    // Phase 3: Study mode implementation placeholder
-    console.log('Study mode selected (not implemented yet):', mode);
+    // Open study setup dialog with selected mode
+    if (appState.currentSet) {
+      setSelectedStudyMode(mode);
+      setShowStudySetup(true);
+    }
+  };
+
+  const handleStartStudySession = (session: StudySessionType) => {
+    appDispatch({ type: 'START_STUDY_SESSION', payload: session });
+    setShowStudySetup(false);
+  };
+
+  const handleEndStudySession = () => {
+    appDispatch({ type: 'END_STUDY_SESSION' });
   };
 
   const handleSideSelect = (sideId: string, multiSelect?: boolean) => {
@@ -278,7 +320,7 @@ export const MainLayout: React.FC = () => {
       modifiedAt: new Date()
     };
 
-    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet });
+    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
     appDispatch({ type: 'UPDATE_FLASHCARD', payload: updatedFlashcard });
   };
 
@@ -490,7 +532,7 @@ export const MainLayout: React.FC = () => {
       modifiedAt: new Date()
     };
 
-    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet });
+    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
     appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: newFlashcard });
     appDispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
   };
@@ -499,13 +541,7 @@ export const MainLayout: React.FC = () => {
     // Debug: console.log('Rendering main content:', { editMode: appState.editMode, hasCurrentSet: !!appState.currentSet });
 
     if (appState.editMode === 'study' && appState.studySession) {
-      return (
-        <div className="study-interface">
-          <h2>Study Session</h2>
-          {/* Study interface will be implemented */}
-          <p>Study mode: {appState.studySession.mode}</p>
-        </div>
-      );
+      return <StudySession onEndSession={handleEndStudySession} flashcardSetFilePath={currentFilePath || undefined} />;
     }
 
     if (!appState.currentSet) {
@@ -582,6 +618,7 @@ export const MainLayout: React.FC = () => {
           <StudyModeSelector
             selectedMode="self-test"
             onModeSelect={handleStudyModeSelect}
+            readyCardsCount={readyCardsCount}
           />
         </div>
       </div>
@@ -646,6 +683,18 @@ export const MainLayout: React.FC = () => {
             setHasUnsavedChanges(false);
           }}
         />
+      )}
+
+      {showStudySetup && appState.currentSet && (
+        <div className="modal-overlay">
+          <StudySetup
+            flashcardSet={appState.currentSet}
+            initialMode={selectedStudyMode}
+            onStartSession={handleStartStudySession}
+            onCancel={() => setShowStudySetup(false)}
+            flashcardSetFilePath={currentFilePath || undefined}
+          />
+        </div>
       )}
 
     </div>

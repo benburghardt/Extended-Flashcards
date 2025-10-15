@@ -66,15 +66,13 @@ export interface StudyProgress {
 }
 
 export interface StudySession {
-  id: string;
-  setId: string;
   mode: StudyMode;
+  questions: StudyQuestion[];
+  currentQuestionIndex: number;
+  score: number;
   startTime: Date;
   endTime?: Date;
-  progress: StudyProgress[];
-  currentQuestionIndex: number;
-  questionsAnswered: number;
-  questionsCorrect: number;
+  progressMap?: Record<string, StudyProgress>;
 }
 
 export type StudyMode = 'self-test' | 'spaced-repetition' | 'flash' | 'multiple-choice' | 'custom-path';
@@ -84,6 +82,7 @@ export interface StudyQuestion {
   arrowId: string;
   flashcardId: string;
   sourceValue: string;
+  arrowLabel: string;
   correctAnswer: string;
   mode: StudyMode;
   options?: string[];
@@ -94,6 +93,7 @@ export interface StudyQuestion {
 
 export interface AppState {
   currentSet?: FlashcardSet;
+  currentSetFilePath?: string;
   currentFlashcard?: Flashcard | null;
   editMode: 'view' | 'edit' | 'study';
   selectedTool: CanvasTool;

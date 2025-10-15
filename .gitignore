@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+MyFlashcards/
 
 # Tauri build artifacts
 src-tauri/target/
@@ -54,6 +55,7 @@ SETUP.md
 # Temporary files
 *.tmp
 *.temp
+nul
 
 # Claude
 .claude

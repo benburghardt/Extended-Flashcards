@@ -35,6 +35,7 @@ export class StudyModeGenerator {
       arrowId: arrow.id,
       flashcardId: flashcard.id,
       sourceValue: sourceSide.value,
+      arrowLabel: arrow.label,
       correctAnswer: destinationSide.value,
       mode,
     };
@@ -106,6 +107,7 @@ export class StudyModeGenerator {
           arrowId: arrow.id,
           flashcardId: flashcard.id,
           sourceValue: sourceSide.value,
+          arrowLabel: arrow.label,
           correctAnswer: destinationSide.value,
           mode: 'custom-path',
         });
@@ -116,6 +118,48 @@ export class StudyModeGenerator {
 
     traverse(startSideId, 0);
     return path;
+  }
+
+  /**
+   * Find the side with the most arrows (incoming + outgoing)
+   * This will be the starting point for the interactive custom path mode
+   */
+  static findMostConnectedSide(flashcard: Flashcard): string | null {
+    if (flashcard.sides.length === 0) return null;
+
+    const connectionCounts = new Map<string, number>();
+
+    // Initialize counts
+    flashcard.sides.forEach(side => {
+      connectionCounts.set(side.id, 0);
+    });
+
+    // Count arrows
+    flashcard.arrows.forEach(arrow => {
+      connectionCounts.set(arrow.sourceId, (connectionCounts.get(arrow.sourceId) || 0) + 1);
+      connectionCounts.set(arrow.destinationId, (connectionCounts.get(arrow.destinationId) || 0) + 1);
+    });
+
+    // Find side with most connections
+    let maxConnections = 0;
+    let mostConnectedSideId: string | null = null;
+
+    connectionCounts.forEach((count, sideId) => {
+      if (count > maxConnections) {
+        maxConnections = count;
+        mostConnectedSideId = sideId;
+      }
+    });
+
+    // If no arrows, just return first side
+    return mostConnectedSideId || flashcard.sides[0].id;
+  }
+
+  /**
+   * Get all outgoing arrows from a specific side
+   */
+  static getOutgoingArrows(flashcard: Flashcard, sideId: string): Arrow[] {
+    return flashcard.arrows.filter(arrow => arrow.sourceId === sideId);
   }
 
   static validateAnswer(question: StudyQuestion, userAnswer: string): boolean {

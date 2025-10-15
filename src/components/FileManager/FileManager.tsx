@@ -53,7 +53,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened 
       }
 
       if (set) {
-        dispatch({ type: 'SET_CURRENT_SET', payload: set });
+        dispatch({ type: 'SET_CURRENT_SET', payload: set, filePath: openedFilePath });
         dispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
 
         // Always clear current flashcard first, then set the new one if available
@@ -79,7 +79,7 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened 
 
   const handleCreateNew = () => {
     const newSet = TauriFileService.createNewSet();
-    dispatch({ type: 'SET_CURRENT_SET', payload: newSet });
+    dispatch({ type: 'SET_CURRENT_SET', payload: newSet, filePath: undefined });
     dispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
     // Clear current flashcard when creating a new set
     dispatch({ type: 'SET_CURRENT_FLASHCARD', payload: null });

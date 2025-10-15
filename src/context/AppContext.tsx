@@ -7,7 +7,7 @@ interface AppContextType {
 }
 
 type AppAction =
-  | { type: 'SET_CURRENT_SET'; payload: FlashcardSet }
+  | { type: 'SET_CURRENT_SET'; payload: FlashcardSet; filePath?: string }
   | { type: 'SET_CURRENT_FLASHCARD'; payload: Flashcard | null }
   | { type: 'SET_EDIT_MODE'; payload: 'view' | 'edit' | 'study' }
   | { type: 'SET_SELECTED_TOOL'; payload: CanvasTool }
@@ -24,7 +24,7 @@ const initialState: AppState = {
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_CURRENT_SET':
-      return { ...state, currentSet: action.payload };
+      return { ...state, currentSet: action.payload, currentSetFilePath: action.filePath };
 
     case 'SET_CURRENT_FLASHCARD':
       return { ...state, currentFlashcard: action.payload };
