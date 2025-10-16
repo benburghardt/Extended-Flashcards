@@ -97,7 +97,6 @@ export const StudySession: React.FC<StudySessionProps> = ({ onEndSession, flashc
           studySession.progressMap,
           flashcardSetFilePath
         );
-        console.log('Progress saved after answer:', arrowId, updatedProgress);
       } catch (error) {
         console.error('Failed to save progress after answer:', error);
       }
@@ -117,19 +116,6 @@ export const StudySession: React.FC<StudySessionProps> = ({ onEndSession, flashc
   };
 
   const handleEndSession = async () => {
-    // Calculate final stats
-    const endTime = new Date();
-    const duration = endTime.getTime() - sessionStats.startTime.getTime();
-    const accuracy = sessionStats.total > 0
-      ? (sessionStats.correct / sessionStats.total) * 100
-      : 0;
-
-    console.log('Study session completed:', {
-      duration: Math.round(duration / 1000) + ' seconds',
-      accuracy: accuracy.toFixed(1) + '%',
-      ...sessionStats,
-    });
-
     // Save progress if using spaced repetition
     if (studySession.mode === 'spaced-repetition' && studySession.progressMap && state.currentSet) {
       try {
@@ -139,7 +125,6 @@ export const StudySession: React.FC<StudySessionProps> = ({ onEndSession, flashc
           studySession.progressMap,
           flashcardSetFilePath
         );
-        console.log('Progress saved successfully');
       } catch (error) {
         console.error('Failed to save progress:', error);
       }

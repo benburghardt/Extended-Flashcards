@@ -123,12 +123,6 @@ export class ProgressService {
     flashcardSetFilePath?: string
   ): Promise<void> {
     try {
-      console.log('=== SAVE PROGRESS START ===');
-      console.log('flashcardSetId:', flashcardSetId);
-      console.log('flashcardSetName:', flashcardSetName);
-      console.log('flashcardSetFilePath:', flashcardSetFilePath);
-      console.log('progress entries:', Object.keys(progress).length);
-
       const progressData: ProgressData = {
         flashcardSetId,
         flashcardSetName,
@@ -140,24 +134,18 @@ export class ProgressService {
       const content = JSON.stringify(progressData, null, 2);
 
       const tauriAPI = await getTauriAPI();
-      console.log('tauriAPI available:', !!tauriAPI);
 
       if (tauriAPI && flashcardSetFilePath) {
         // Desktop version - save progress file alongside flashcard set
         const { writeTextFile } = tauriAPI;
         const progressPath = this.getProgressFilePath(flashcardSetFilePath);
 
-        console.log('Saving to desktop path:', progressPath);
         await writeTextFile(progressPath, content);
-        console.log('Desktop save completed successfully');
       } else {
         // Web version - use localStorage
         const key = this.PROGRESS_STORAGE_PREFIX + flashcardSetId;
-        console.log('Saving to localStorage key:', key);
         localStorage.setItem(key, content);
-        console.log('localStorage save completed successfully');
       }
-      console.log('=== SAVE PROGRESS END ===');
     } catch (error) {
       console.error('Error saving progress:', error);
       throw error;

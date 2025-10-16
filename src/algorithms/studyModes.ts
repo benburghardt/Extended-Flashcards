@@ -1,4 +1,4 @@
-// Phase 3: Study Mode Generator - Complete but not yet integrated
+// Phase 3: Study Mode Generator
 import { StudyQuestion, Flashcard, Arrow, StudyMode } from '../types';
 
 export class StudyModeGenerator {

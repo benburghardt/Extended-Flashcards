@@ -1,4 +1,4 @@
-// Phase 3: Spaced Repetition Algorithm - Complete but not yet integrated
+// Phase 3: Spaced Repetition Algorithm
 import { StudyProgress } from '../types';
 
 export class SpacedRepetitionAlgorithm {
