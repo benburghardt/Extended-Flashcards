@@ -7,7 +7,7 @@ interface FlashcardCanvasProps {
   canvasState: CanvasState;
   selectedTool: CanvasTool;
   onSideSelect: (sideId: string, multiSelect?: boolean) => void;
-  onSideMove: (sideId: string, newPosition: Position) => void;
+  onSideMove: (sideId: string, newPosition: Position, isComplete?: boolean) => void;
   onSideTextUpdate: (sideId: string, newText: string) => void;
   onSideDelete: (sideIds: string[]) => void;
   onArrowCreate: (sourceId: string, destinationId: string) => void;
@@ -56,9 +56,9 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  // const [dragStart, setDragStart] = useState<Position | null>(null); // Reserved for future use
   const [dragSideId, setDragSideId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Position | null>(null);
+  const [lastDragPosition, setLastDragPosition] = useState<Position | null>(null);
   const [hoverSideId, setHoverSideId] = useState<string | null>(null);
   const [hoverArrowId, setHoverArrowId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<Position>({ x: 0, y: 0 });
@@ -70,7 +70,6 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
   // Constants for rendering (base sizes, scaling handled in drawing)
   const SIDE_WIDTH = 120;
   const SIDE_HEIGHT = 80;
-  // const CLICK_TOLERANCE = 5; // Reserved for future use
 
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -282,7 +281,6 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
     }
 
     const rect = canvas.getBoundingClientRect();
-    // Debug: console.log('Drawing canvas:', rect.width, 'x', rect.height);
 
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
@@ -366,8 +364,6 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
         screenPreviewPos.y + previewHeight / 2
       );
     }
-
-    // Debug: console.log('Canvas draw complete. Sides:', flashcard.sides.length, 'Arrows:', flashcard.arrows.length);
   }, [flashcard, canvasState, drawSide, drawArrow, mousePos]);
 
   const getCanvasPosition = useCallback((event: MouseEvent | React.MouseEvent): Position => {
@@ -623,7 +619,6 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
 
     if (clickedSide && canvasState.selectedSideIds.includes(clickedSide.id)) {
       setIsDragging(true);
-      // setDragStart(canvasPos); // Reserved for future use
       setDragSideId(clickedSide.id);
 
       // Calculate offset from click position to side's top-left corner
@@ -684,16 +679,26 @@ export const FlashcardCanvas: React.FC<FlashcardCanvasProps> = ({
           ? CanvasUtils.snapToGrid(newPosition, canvasState.gridSize)
           : newPosition;
 
-        onSideMove(dragSideId, snappedPosition);
+        // Store the last position for use in mouseUp
+        setLastDragPosition(snappedPosition);
+
+        // Pass false to indicate this is an intermediate move (not complete)
+        onSideMove(dragSideId, snappedPosition, false);
       }
     }
   };
 
   const handleCanvasMouseUp = () => {
+    // If we were dragging, signal the move is complete
+    if (isDragging && dragSideId && lastDragPosition) {
+      // Pass true to indicate this move is complete (push to history)
+      onSideMove(dragSideId, lastDragPosition, true);
+    }
+
     setIsDragging(false);
-    // setDragStart(null); // Reserved for future use
     setDragSideId(null);
     setDragOffset(null);
+    setLastDragPosition(null);
     setIsPanning(false);
     setPanStart(null);
   };

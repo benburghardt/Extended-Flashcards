@@ -7,9 +7,10 @@ import { isWeb } from '../../utils/environmentDetection';
 interface FileManagerProps {
   onClose: () => void;
   onFileOpened?: (filePath: string, set: any) => void;
+  onNewFromTemplate?: () => void;
 }
 
-export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened }) => {
+export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened, onNewFromTemplate }) => {
   const { dispatch } = useApp();
   const [recentFiles, setRecentFiles] = useState<FileMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,6 +128,17 @@ export const FileManager: React.FC<FileManagerProps> = ({ onClose, onFileOpened 
               disabled={isLoading}
             >
               {isLoading ? 'Opening...' : 'Open File...'}
+            </button>
+            <button
+              className="template-button"
+              onClick={() => {
+                if (onNewFromTemplate) {
+                  onNewFromTemplate();
+                }
+              }}
+              disabled={isLoading}
+            >
+              New from Template...
             </button>
           </section>
 

@@ -37,10 +37,10 @@ export interface FlashcardTemplate {
   name: string;
   description?: string;
   sides: Omit<FlashcardSide, 'id' | 'value'>[];
-  arrows: Omit<Arrow, 'id' | 'sourceId' | 'destinationId'> & {
+  arrows: (Omit<Arrow, 'id' | 'sourceId' | 'destinationId'> & {
     sourceIndex: number;
     destinationIndex: number;
-  }[];
+  })[];
   createdAt: Date;
 }
 

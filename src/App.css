@@ -1438,3 +1438,448 @@ html, body {
 .reset-path-btn:hover {
   transform: scale(1.05);
 }
+
+/* ============================================
+   PHASE 4: TEMPLATE SYSTEM STYLES
+   ============================================ */
+
+/* Save as Template Button */
+.save-template-button {
+  background: #9b59b6;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  min-width: 120px;
+}
+
+.save-template-button:hover:not(:disabled) {
+  background: #8e44ad;
+}
+
+.save-template-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Template Dialog */
+.template-dialog {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  width: clamp(400px, 80vw, 600px);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+
+.template-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 2px solid #e9ecef;
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+}
+
+.template-dialog-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.template-dialog-header .close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.template-dialog-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.template-dialog-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.template-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.template-form-group label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.template-form-group input[type="text"],
+.template-form-group textarea {
+  padding: 0.75rem;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.template-form-group input[type="text"]:focus,
+.template-form-group textarea:focus {
+  border-color: #9b59b6;
+  box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.1);
+}
+
+.template-form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.template-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.template-dialog-actions .cancel-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.template-dialog-actions .cancel-btn:hover {
+  background: #5a6268;
+}
+
+.template-dialog-actions .save-template-btn {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+}
+
+.template-dialog-actions .save-template-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(155, 89, 182, 0.4);
+}
+
+.template-dialog-actions .save-template-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Template Selection Dialog */
+.template-selection-dialog {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  width: clamp(400px, 80vw, 700px);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+
+.template-selection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 2px solid #e9ecef;
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+}
+
+.template-selection-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.template-selection-header .close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.template-selection-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.template-selection-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.template-selection-info {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 6px;
+  border-left: 4px solid #9b59b6;
+}
+
+.template-selection-info p {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.template-browser {
+  display: flex;
+  justify-content: center;
+}
+
+.browse-template-btn {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+}
+
+.browse-template-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(155, 89, 182, 0.4);
+}
+
+.browse-template-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.template-preview {
+  background: #ffffff;
+  border: 2px solid #9b59b6;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.template-preview h3 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+  font-size: 1.2rem;
+}
+
+.template-preview-card {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #9b59b6;
+}
+
+.template-preview-header {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  color: #2c3e50;
+}
+
+.template-description {
+  color: #6c757d;
+  font-size: 0.95rem;
+  margin: 0.5rem 0 1rem 0;
+  line-height: 1.5;
+}
+
+.template-stats {
+  display: flex;
+  gap: 2rem;
+  font-size: 0.95rem;
+}
+
+.template-stat {
+  color: #2c3e50;
+}
+
+.template-stat strong {
+  color: #9b59b6;
+  font-size: 1.1rem;
+}
+
+.template-selection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.apply-template-btn {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+}
+
+.apply-template-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(155, 89, 182, 0.4);
+}
+
+.apply-template-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Template Button in File Manager */
+.template-button {
+  background: #9b59b6;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.template-button:hover:not(:disabled) {
+  background: #8e44ad;
+}
+
+.template-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Duplicate Structure Button */
+.duplicate-template-button {
+  background: #e67e22;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  min-width: 140px;
+}
+
+.duplicate-template-button:hover:not(:disabled) {
+  background: #d35400;
+}
+
+.duplicate-template-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Recent Templates Section */
+.recent-templates-section {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+}
+
+.recent-templates-section h3 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.recent-templates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.recent-template-item {
+  background: white;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recent-template-item:hover {
+  border-color: #9b59b6;
+  background: #f8f3fc;
+  transform: translateX(4px);
+}
+
+.recent-template-item.selected {
+  border-color: #9b59b6;
+  background: #f0e6f6;
+  box-shadow: 0 2px 8px rgba(155, 89, 182, 0.2);
+}
+
+.recent-template-name {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+  font-size: 1rem;
+}
+
+.recent-template-stats {
+  font-size: 0.85rem;
+  color: #6c757d;
+}

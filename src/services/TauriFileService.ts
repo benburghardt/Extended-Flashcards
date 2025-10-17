@@ -361,21 +361,22 @@ export class TauriFileService {
         Array.isArray(data.sides) &&
         Array.isArray(data.arrows) &&
         data.createdAt &&
-        // Validate sides structure
+        // Validate sides structure (no id or value in template)
         data.sides.every((side: any) =>
           side &&
-          typeof side.id === 'string' &&
-          typeof side.value === 'string' &&
           side.position &&
           typeof side.position.x === 'number' &&
           typeof side.position.y === 'number'
         ) &&
-        // Validate arrows structure
+        // Validate arrows structure (using indices, not IDs)
         data.arrows.every((arrow: any) =>
           arrow &&
-          typeof arrow.id === 'string' &&
-          typeof arrow.sourceId === 'string' &&
-          typeof arrow.destinationId === 'string' &&
+          typeof arrow.sourceIndex === 'number' &&
+          arrow.sourceIndex >= 0 &&
+          arrow.sourceIndex < data.sides.length &&
+          typeof arrow.destinationIndex === 'number' &&
+          arrow.destinationIndex >= 0 &&
+          arrow.destinationIndex < data.sides.length &&
           typeof arrow.label === 'string'
         )
       );
@@ -397,10 +398,8 @@ export class TauriFileService {
     };
   }
 
-  // Phase 4: Template creation - not yet implemented
-  static createNewTemplate(_name: string = 'New Template'): FlashcardTemplate {
-    throw new Error('Template creation not implemented - Phase 4 feature');
-  }
+  // Phase 4: Template creation is handled by TemplateService.createTemplateFromFlashcard()
+  // Use TemplateService for template operations
 
   private static generateId(): string {
     return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);

@@ -7,15 +7,21 @@ import { StudyModeSelector } from '../Study/StudyModeSelector';
 import { StudySetup } from '../Study/StudySetup';
 import { StudySession } from '../Study/StudySession';
 import { FileManager } from '../FileManager/FileManager';
-import { StudyMode, FlashcardSide, Arrow, Flashcard, StudySession as StudySessionType } from '../../types';
+import { SaveTemplateDialog } from '../Template/SaveTemplateDialog';
+import { TemplateSelectionDialog } from '../Template/TemplateSelectionDialog';
+import { StudyMode, FlashcardSide, Arrow, Flashcard, StudySession as StudySessionType, FlashcardTemplate } from '../../types';
 import { TauriFileService } from '../../services/TauriFileService';
 import { ProgressService } from '../../services/ProgressService';
+import { TemplateService } from '../../services/TemplateService';
+import { HistoryService } from '../../services/HistoryService';
 
 export const MainLayout: React.FC = () => {
   const { state: appState, dispatch: appDispatch } = useApp();
   const { state: canvasState, dispatch: canvasDispatch } = useCanvas();
   const [showFileManager, setShowFileManager] = useState(false);
   const [showStudySetup, setShowStudySetup] = useState(false);
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
+  const [showTemplateSelectionDialog, setShowTemplateSelectionDialog] = useState(false);
   const [selectedStudyMode, setSelectedStudyMode] = useState<StudyMode>('self-test');
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -24,6 +30,11 @@ export const MainLayout: React.FC = () => {
   const [lastSavedState, setLastSavedState] = useState<string | null>(null);
   const [readyCardsCount, setReadyCardsCount] = useState(0);
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Phase 4.4: Undo/Redo history management
+  const historyServiceRef = useRef<HistoryService>(new HistoryService());
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
@@ -234,11 +245,28 @@ export const MainLayout: React.FC = () => {
         setLastSavedState(null);
         setHasUnsavedChanges(true);
       }
+
+      // Phase 4.4: Ctrl+Z for Undo
+      if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        if (canUndo) {
+          handleUndo();
+        }
+      }
+
+      // Phase 4.4: Ctrl+Y or Ctrl+Shift+Z for Redo
+      if (((event.ctrlKey || event.metaKey) && event.key === 'y') ||
+          ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'z')) {
+        event.preventDefault();
+        if (canRedo) {
+          handleRedo();
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [appState.currentSet, handleSave, handleSaveAs]);
+  }, [appState.currentSet, handleSave, handleSaveAs, canUndo, canRedo]);
 
   // Warn before closing with unsaved changes
   useEffect(() => {
@@ -309,7 +337,7 @@ export const MainLayout: React.FC = () => {
     }
   };
 
-  const updateCurrentFlashcard = (updatedFlashcard: Flashcard) => {
+  const updateCurrentFlashcard = (updatedFlashcard: Flashcard, skipHistory: boolean = false) => {
     if (!appState.currentSet) return;
 
     const updatedSet = {
@@ -322,7 +350,46 @@ export const MainLayout: React.FC = () => {
 
     appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
     appDispatch({ type: 'UPDATE_FLASHCARD', payload: updatedFlashcard });
+
+    // Push to history (unless this is from undo/redo)
+    if (!skipHistory) {
+      historyServiceRef.current.pushState(updatedFlashcard);
+      updateHistoryButtons();
+    }
   };
+
+  // Update undo/redo button states
+  const updateHistoryButtons = () => {
+    setCanUndo(historyServiceRef.current.canUndo());
+    setCanRedo(historyServiceRef.current.canRedo());
+  };
+
+  // Phase 4.4: Undo/Redo handlers
+  const handleUndo = () => {
+    const previousState = historyServiceRef.current.undo();
+    if (previousState) {
+      updateCurrentFlashcard(previousState, true); // Skip adding to history
+      updateHistoryButtons();
+    }
+  };
+
+  const handleRedo = () => {
+    const nextState = historyServiceRef.current.redo();
+    if (nextState) {
+      updateCurrentFlashcard(nextState, true); // Skip adding to history
+      updateHistoryButtons();
+    }
+  };
+
+  // Initialize history when flashcard changes
+  useEffect(() => {
+    if (appState.currentFlashcard) {
+      // Clear history and push initial state
+      historyServiceRef.current.clear();
+      historyServiceRef.current.pushState(appState.currentFlashcard);
+      updateHistoryButtons();
+    }
+  }, [appState.currentFlashcard?.id]); // Only when flashcard ID changes
 
   const handleSideDelete = (sideIds: string[]) => {
     if (!appState.currentFlashcard) return;
@@ -368,7 +435,7 @@ export const MainLayout: React.FC = () => {
     }
   };
 
-  const handleSideMove = (sideId: string, newPosition: { x: number; y: number }) => {
+  const handleSideMove = (sideId: string, newPosition: { x: number; y: number }, isComplete?: boolean) => {
     if (!appState.currentFlashcard) return;
 
     const updatedSides = appState.currentFlashcard.sides.map(side =>
@@ -381,7 +448,9 @@ export const MainLayout: React.FC = () => {
       modifiedAt: new Date()
     };
 
-    updateCurrentFlashcard(updatedFlashcard);
+    // Only push to history when the move is complete (not intermediate drag positions)
+    const skipHistory = !isComplete;
+    updateCurrentFlashcard(updatedFlashcard, skipHistory);
   };
 
   const handleSideTextUpdate = (sideId: string, newText: string) => {
@@ -537,6 +606,113 @@ export const MainLayout: React.FC = () => {
     appDispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
   };
 
+  // Phase 4.5: Duplicate current flashcard as template (same structure, empty values)
+  const handleDuplicateAsTemplate = () => {
+    if (!appState.currentSet || !appState.currentFlashcard) return;
+
+    // Validate that the flashcard has content to duplicate
+    if (appState.currentFlashcard.sides.length === 0) {
+      setSaveError('Cannot duplicate empty flashcard. Add at least one side first.');
+      return;
+    }
+
+    const flashcardName = `Card ${appState.currentSet.flashcards.length + 1}`;
+    const newFlashcard = TemplateService.duplicateFlashcardAsTemplate(
+      appState.currentFlashcard,
+      flashcardName
+    );
+
+    // Add flashcard to set
+    const updatedSet = {
+      ...appState.currentSet,
+      flashcards: [...appState.currentSet.flashcards, newFlashcard],
+      modifiedAt: new Date()
+    };
+
+    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
+    appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: newFlashcard });
+    appDispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
+
+    console.log('Flashcard duplicated as template:', newFlashcard.name);
+  };
+
+  // Phase 4.1: Save current flashcard as template
+  const handleSaveAsTemplate = async (templateName: string, description?: string) => {
+    if (!appState.currentFlashcard) {
+      setSaveError('No flashcard selected to save as template');
+      return;
+    }
+
+    // Validate that the flashcard has content
+    if (appState.currentFlashcard.sides.length === 0) {
+      setSaveError('Cannot save empty flashcard as template. Add at least one side first.');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      // Create template from current flashcard
+      const template = TemplateService.createTemplateFromFlashcard(
+        appState.currentFlashcard,
+        templateName,
+        description
+      );
+
+      // Save template to file
+      await TauriFileService.saveTemplate(template);
+
+      // Close dialog
+      setShowSaveTemplateDialog(false);
+
+      // Success feedback (you could add a success banner here)
+      console.log('Template saved successfully:', template.name);
+    } catch (error) {
+      console.error('Error saving template:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to save template');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Phase 4.2: Apply template to create new flashcard
+  const handleApplyTemplate = (template: FlashcardTemplate) => {
+    // Create a new set if one doesn't exist
+    let targetSet = appState.currentSet;
+    if (!targetSet) {
+      targetSet = TauriFileService.createNewSet();
+      appDispatch({ type: 'SET_CURRENT_SET', payload: targetSet, filePath: undefined });
+      setCurrentFilePath(null);
+      setLastSavedState(null);
+      setHasUnsavedChanges(true);
+    }
+
+    // Apply template to create new flashcard
+    const flashcardName = `Card ${targetSet.flashcards.length + 1}`;
+    const newFlashcard = TemplateService.applyTemplateToNewFlashcard(
+      template,
+      flashcardName
+    );
+
+    // Add flashcard to set
+    const updatedSet = {
+      ...targetSet,
+      flashcards: [...targetSet.flashcards, newFlashcard],
+      modifiedAt: new Date()
+    };
+
+    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
+    appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: newFlashcard });
+    appDispatch({ type: 'SET_EDIT_MODE', payload: 'edit' });
+
+    // Close dialogs
+    setShowTemplateSelectionDialog(false);
+    setShowFileManager(false);
+
+    console.log('Flashcard created from template:', template.name);
+  };
+
   const renderMainContent = () => {
     // Debug: console.log('Rendering main content:', { editMode: appState.editMode, hasCurrentSet: !!appState.currentSet });
 
@@ -574,16 +750,16 @@ export const MainLayout: React.FC = () => {
           <CanvasToolbar
             selectedTool={appState.selectedTool}
             onToolSelect={handleToolSelect}
-            onUndo={() => {/* Phase 4: Undo implementation */}}
-            onRedo={() => {/* Phase 4: Redo implementation */}}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
             onZoomIn={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.min(5, canvasState.zoom + 0.2) })}
             onZoomOut={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.max(0.1, canvasState.zoom - 0.2) })}
             onZoomReset={() => {
               canvasDispatch({ type: 'SET_ZOOM', payload: 1 });
               canvasDispatch({ type: 'SET_PAN_OFFSET', payload: { x: 0, y: 0 } });
             }}
-            canUndo={false}
-            canRedo={false}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
         </div>
 
@@ -649,6 +825,20 @@ export const MainLayout: React.FC = () => {
               >
                 Save As...
               </button>
+              <button
+                onClick={() => setShowSaveTemplateDialog(true)}
+                disabled={!appState.currentFlashcard || appState.currentFlashcard.sides.length === 0}
+                className="save-template-button"
+              >
+                Save as Template
+              </button>
+              <button
+                onClick={handleDuplicateAsTemplate}
+                disabled={!appState.currentFlashcard || appState.currentFlashcard.sides.length === 0}
+                className="duplicate-template-button"
+              >
+                Duplicate Structure
+              </button>
               <span className="current-set">{getDisplayName()}</span>
             </>
           )}
@@ -682,6 +872,10 @@ export const MainLayout: React.FC = () => {
             setLastSavedState(state);
             setHasUnsavedChanges(false);
           }}
+          onNewFromTemplate={() => {
+            setShowFileManager(false);
+            setShowTemplateSelectionDialog(true);
+          }}
         />
       )}
 
@@ -695,6 +889,20 @@ export const MainLayout: React.FC = () => {
             flashcardSetFilePath={currentFilePath || undefined}
           />
         </div>
+      )}
+
+      {showSaveTemplateDialog && (
+        <SaveTemplateDialog
+          onSave={handleSaveAsTemplate}
+          onCancel={() => setShowSaveTemplateDialog(false)}
+        />
+      )}
+
+      {showTemplateSelectionDialog && (
+        <TemplateSelectionDialog
+          onSelectTemplate={handleApplyTemplate}
+          onCancel={() => setShowTemplateSelectionDialog(false)}
+        />
       )}
 
     </div>
