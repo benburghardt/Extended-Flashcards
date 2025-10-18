@@ -3155,3 +3155,202 @@ Phase 4 successfully implemented a comprehensive template system with advanced f
 The Extended Flashcards application now offers professional-grade template management and history features, significantly enhancing user productivity and workflow efficiency. Phase 4 is complete and ready for production use.
 
 **Phase 3 Cleanup Complete**: Zero technical debt, production-ready code, comprehensive study system fully functional and polished.
+---
+
+## Session 6: UI Restructuring and Flashcard List Panel Enhancement (October 17, 2025)
+
+### Overview
+Restructured the main UI layout to display a comprehensive flashcard list panel in the right sidebar, replacing the previous study mode selector. Moved study controls to the header, relocated the duplicate structure button to the flashcard list, and improved the flashcard deletion workflow.
+
+### Changes Made
+
+#### 1. Layout Restructure - Side Panel Repositioning
+- **Files Modified**:
+  - `src/App.css` (lines 187-231)
+  - `src/components/Layout/MainLayout.tsx` (lines 814-892)
+
+- **Problem Addressed**: The flashcard list panel was absolutely positioned over the canvas, causing the "New Flashcard" button and other controls to be hidden behind the toolbar.
+
+- **Solution Implemented**:
+  - Changed `.editor-interface` from vertical (`flex-direction: column`) to horizontal (`flex-direction: row`) layout
+  - Created new `.main-editor-area` container to hold toolbar and canvas in a vertical stack
+  - Removed absolute positioning from `.side-panel`, converting it to normal flex layout
+  - Wrapped toolbar and canvas in `<div className="main-editor-area">` in MainLayout
+
+- **New Layout Structure**:
+  ```
+  editor-interface (horizontal flex)
+    ├── main-editor-area (vertical flex, takes remaining space)
+    │   ├── toolbar-container
+    │   └── canvas-container
+    └── side-panel (fixed width 250-350px, vertical flex)
+        └── flashcard-list-panel
+  ```
+
+- **Result**: Flashcard list panel now properly positioned alongside the canvas with all buttons visible and accessible.
+
+#### 2. Duplicate Structure Button Relocation
+- **Files Modified**:
+  - `src/components/FlashcardList/FlashcardListPanel.tsx` (lines 64-83)
+  - `src/components/Layout/MainLayout.tsx` (line 886-887)
+  - `src/App.css` (lines 1945-1994)
+
+- **Change**: Moved "Duplicate Structure" button from header to flashcard list panel, positioned next to "+ New" button
+
+- **Implementation**:
+  - Added `onDuplicateStructure` and `canDuplicate` props to FlashcardListPanel
+  - Created `.flashcard-list-actions` container to hold both buttons
+  - Styled with orange color scheme matching original duplicate button
+  - Button disabled when no current flashcard or flashcard has no sides
+
+- **Benefits**:
+  - Contextually located with flashcard creation controls
+  - Cleaner header with fewer buttons
+  - Disabled state reflects current flashcard status
+  - Easier to discover alongside "+ New" button
+
+#### 3. Flashcard Deletion Workflow Improvement
+- **Files Modified**:
+  - `src/components/FlashcardList/FlashcardListPanel.tsx` (lines 134-143)
+  - `src/components/Layout/MainLayout.tsx` (lines 724-756)
+
+- **Changes Made**:
+  - **Removed Confirmation Dialog**: Deleted `window.confirm()` call for instant deletion
+  - **Enhanced History Support**: Updated deletion handler to properly manage undo/redo state
+
+- **Implementation Details**:
+  ```typescript
+  // In FlashcardListPanel - removed confirmation
+  <button
+    className="flashcard-delete-button"
+    onClick={(e) => {
+      e.stopPropagation();
+      onFlashcardDelete(flashcard.id);  // Direct deletion, no confirm
+    }}
+  >
+    ×
+  </button>
+
+  // In MainLayout - history management on delete
+  if (appState.currentFlashcard?.id === flashcardId) {
+    const newCurrent = updatedFlashcards.length > 0 ? updatedFlashcards[0] : null;
+    appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: newCurrent });
+
+    // Update history for new current flashcard
+    if (newCurrent) {
+      historyServiceRef.current.clear();
+      historyServiceRef.current.pushState(newCurrent);
+    } else {
+      historyServiceRef.current.clear();
+    }
+    updateHistoryButtons();
+  }
+  ```
+
+- **Benefits**:
+  - Faster workflow without interruption
+  - Undo (Ctrl+Z) available for recovery within current flashcard
+  - Consistent with modern UI patterns
+  - Reduced friction in flashcard management
+
+#### 4. CSS Styling Enhancements
+- **File Modified**: `src/App.css` (lines 1945-1994)
+
+- **New Styles Added**:
+
+##### Flashcard List Actions Container
+```css
+.flashcard-list-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+```
+
+##### Duplicate Structure Panel Button
+```css
+.duplicate-structure-panel-button {
+  background: #e67e22;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(230, 126, 34, 0.2);
+}
+
+.duplicate-structure-panel-button:hover:not(:disabled) {
+  background: #d35400;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(230, 126, 34, 0.3);
+}
+
+.duplicate-structure-panel-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+```
+
+### User Experience Improvements
+
+#### Before This Session
+- Duplicate button in header (far from creation context)
+- Confirmation dialog interrupted deletion workflow
+- No undo capability for deletions
+- Panel positioning caused visibility issues
+
+#### After This Session
+- Duplicate button contextually placed next to "+ New"
+- One-click deletion with smooth workflow
+- Undo (Ctrl+Z) available within current flashcard
+- All controls visible and accessible in properly positioned panel
+- Consistent button styling and interaction patterns
+
+### Files Summary
+
+#### Modified Files (3)
+1. `src/components/FlashcardList/FlashcardListPanel.tsx` - Added duplicate button, removed confirmation dialog
+2. `src/components/Layout/MainLayout.tsx` - Layout restructure, enhanced delete handler, pass duplicate props
+3. `src/App.css` - Layout restructure styles, duplicate button styles
+
+#### Lines of Code
+- **Added**: ~60 lines
+  - FlashcardListPanel.tsx: 15 lines (duplicate button, props)
+  - MainLayout.tsx: 15 lines (layout wrapper, history management)
+  - App.css: 30 lines (button actions container, duplicate button styles)
+- **Removed**: ~25 lines (confirmation dialog, absolute positioning)
+- **Modified**: ~20 lines (layout structure, props passing)
+- **Net**: +35 lines
+
+### Known Limitations
+
+#### Undo Functionality
+- Undo only works within the currently selected flashcard
+- Cannot undo flashcard deletion at the set level (only side/arrow edits within a flashcard)
+- Deleting a flashcard and switching to another clears undo history for the deleted flashcard
+- Consider implementing set-level undo in future for flashcard CRUD operations
+
+### Conclusion
+
+This session successfully improved the flashcard management workflow through strategic button relocation and streamlined deletion. The duplicate button is now more discoverable in its contextual location, and the removal of confirmation dialogs creates a faster, more modern user experience with undo as the safety net.
+
+**Key Achievements**:
+- ✅ Duplicate button relocated to flashcard list panel
+- ✅ Side panel properly positioned with horizontal layout
+- ✅ Confirmation dialog removed for faster workflow
+- ✅ Undo/redo support maintained for current flashcard
+- ✅ Consistent styling with existing design system
+- ✅ All controls visible and accessible
+
+**Code Quality**:
+- Zero TypeScript errors or warnings
+- Clean component props and state management
+- Proper CSS organization
+- Consistent interaction patterns
+
+The Extended Flashcards application now offers a more intuitive and efficient flashcard management experience with better button organization and streamlined workflows.

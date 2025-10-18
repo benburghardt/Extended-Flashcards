@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useCanvas } from '../../context/CanvasContext';
 import { FlashcardCanvas } from '../Canvas/FlashcardCanvas';
 import { CanvasToolbar } from '../Toolbar/CanvasToolbar';
-import { StudyModeSelector } from '../Study/StudyModeSelector';
+import { FlashcardListPanel } from '../FlashcardList/FlashcardListPanel';
 import { StudySetup } from '../Study/StudySetup';
 import { StudySession } from '../Study/StudySession';
 import { FileManager } from '../FileManager/FileManager';
@@ -713,6 +713,88 @@ export const MainLayout: React.FC = () => {
     console.log('Flashcard created from template:', template.name);
   };
 
+  // Flashcard list management handlers
+  const handleFlashcardSelect = (flashcard: Flashcard) => {
+    appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: flashcard });
+    // Clear canvas selections when switching flashcards
+    canvasDispatch({ type: 'CLEAR_SELECTION' });
+    canvasDispatch({ type: 'FINISH_ARROW_CREATION' });
+  };
+
+  const handleFlashcardDelete = (flashcardId: string) => {
+    if (!appState.currentSet) return;
+
+    // Store the current state before deletion for potential undo
+    const deletedFlashcard = appState.currentSet.flashcards.find(card => card.id === flashcardId);
+    if (!deletedFlashcard) return;
+
+    const deletedIndex = appState.currentSet.flashcards.findIndex(card => card.id === flashcardId);
+
+    const updatedFlashcards = appState.currentSet.flashcards.filter(card => card.id !== flashcardId);
+    const updatedSet = {
+      ...appState.currentSet,
+      flashcards: updatedFlashcards,
+      modifiedAt: new Date()
+    };
+
+    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
+
+    // If we deleted the current flashcard, select another one or null
+    if (appState.currentFlashcard?.id === flashcardId) {
+      const newCurrent = updatedFlashcards.length > 0 ? updatedFlashcards[0] : null;
+      appDispatch({ type: 'SET_CURRENT_FLASHCARD', payload: newCurrent });
+
+      // Push the new state to history (or clear if no flashcards remain)
+      if (newCurrent) {
+        historyServiceRef.current.clear();
+        historyServiceRef.current.pushState(newCurrent);
+      } else {
+        historyServiceRef.current.clear();
+      }
+      updateHistoryButtons();
+    }
+  };
+
+  const handleFlashcardRename = (flashcardId: string, newName: string) => {
+    if (!appState.currentSet) return;
+
+    const updatedFlashcards = appState.currentSet.flashcards.map(card =>
+      card.id === flashcardId ? { ...card, name: newName, modifiedAt: new Date() } : card
+    );
+
+    const updatedSet = {
+      ...appState.currentSet,
+      flashcards: updatedFlashcards,
+      modifiedAt: new Date()
+    };
+
+    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
+
+    // Update current flashcard if it's the one being renamed
+    if (appState.currentFlashcard?.id === flashcardId) {
+      const updatedFlashcard = updatedFlashcards.find(card => card.id === flashcardId);
+      if (updatedFlashcard) {
+        appDispatch({ type: 'UPDATE_FLASHCARD', payload: updatedFlashcard });
+      }
+    }
+  };
+
+  const handleFlashcardReorder = (fromIndex: number, toIndex: number) => {
+    if (!appState.currentSet) return;
+
+    const flashcards = [...appState.currentSet.flashcards];
+    const [movedCard] = flashcards.splice(fromIndex, 1);
+    flashcards.splice(toIndex, 0, movedCard);
+
+    const updatedSet = {
+      ...appState.currentSet,
+      flashcards,
+      modifiedAt: new Date()
+    };
+
+    appDispatch({ type: 'SET_CURRENT_SET', payload: updatedSet, filePath: currentFilePath || undefined });
+  };
+
   const renderMainContent = () => {
     // Debug: console.log('Rendering main content:', { editMode: appState.editMode, hasCurrentSet: !!appState.currentSet });
 
@@ -746,55 +828,63 @@ export const MainLayout: React.FC = () => {
 
     return (
       <div className="editor-interface">
-        <div className="toolbar-container">
-          <CanvasToolbar
-            selectedTool={appState.selectedTool}
-            onToolSelect={handleToolSelect}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
-            onZoomIn={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.min(5, canvasState.zoom + 0.2) })}
-            onZoomOut={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.max(0.1, canvasState.zoom - 0.2) })}
-            onZoomReset={() => {
-              canvasDispatch({ type: 'SET_ZOOM', payload: 1 });
-              canvasDispatch({ type: 'SET_PAN_OFFSET', payload: { x: 0, y: 0 } });
-            }}
-            canUndo={canUndo}
-            canRedo={canRedo}
-          />
-        </div>
-
-        <div className="canvas-container">
-          {appState.currentFlashcard && (
-            <FlashcardCanvas
-              flashcard={appState.currentFlashcard}
-              canvasState={canvasState}
+        <div className="main-editor-area">
+          <div className="toolbar-container">
+            <CanvasToolbar
               selectedTool={appState.selectedTool}
-              onSideSelect={handleSideSelect}
-              onSideMove={handleSideMove}
-              onSideTextUpdate={handleSideTextUpdate}
-              onSideDelete={handleSideDelete}
-              onArrowCreate={handleArrowCreate}
-              onArrowTextUpdate={handleArrowTextUpdate}
-              onArrowSelect={handleArrowSelect}
-              onArrowDelete={handleArrowDelete}
-              onCanvasClick={handleCanvasClick}
-              onZoomChange={(newZoom) => canvasDispatch({ type: 'SET_ZOOM', payload: newZoom })}
-              onPanChange={(newOffset) => canvasDispatch({ type: 'SET_PAN_OFFSET', payload: newOffset })}
-              newSideForEditing={newSideForEditing}
-              newArrowForEditing={newArrowForEditing}
-              onEditingComplete={() => {
-                setNewSideForEditing(null);
-                setNewArrowForEditing(null);
+              onToolSelect={handleToolSelect}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onZoomIn={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.min(5, canvasState.zoom + 0.2) })}
+              onZoomOut={() => canvasDispatch({ type: 'SET_ZOOM', payload: Math.max(0.1, canvasState.zoom - 0.2) })}
+              onZoomReset={() => {
+                canvasDispatch({ type: 'SET_ZOOM', payload: 1 });
+                canvasDispatch({ type: 'SET_PAN_OFFSET', payload: { x: 0, y: 0 } });
               }}
+              canUndo={canUndo}
+              canRedo={canRedo}
             />
-          )}
+          </div>
+
+          <div className="canvas-container">
+            {appState.currentFlashcard && (
+              <FlashcardCanvas
+                flashcard={appState.currentFlashcard}
+                canvasState={canvasState}
+                selectedTool={appState.selectedTool}
+                onSideSelect={handleSideSelect}
+                onSideMove={handleSideMove}
+                onSideTextUpdate={handleSideTextUpdate}
+                onSideDelete={handleSideDelete}
+                onArrowCreate={handleArrowCreate}
+                onArrowTextUpdate={handleArrowTextUpdate}
+                onArrowSelect={handleArrowSelect}
+                onArrowDelete={handleArrowDelete}
+                onCanvasClick={handleCanvasClick}
+                onZoomChange={(newZoom) => canvasDispatch({ type: 'SET_ZOOM', payload: newZoom })}
+                onPanChange={(newOffset) => canvasDispatch({ type: 'SET_PAN_OFFSET', payload: newOffset })}
+                newSideForEditing={newSideForEditing}
+                newArrowForEditing={newArrowForEditing}
+                onEditingComplete={() => {
+                  setNewSideForEditing(null);
+                  setNewArrowForEditing(null);
+                }}
+              />
+            )}
+          </div>
         </div>
 
         <div className="side-panel">
-          <StudyModeSelector
-            selectedMode="self-test"
-            onModeSelect={handleStudyModeSelect}
-            readyCardsCount={readyCardsCount}
+          <FlashcardListPanel
+            flashcards={appState.currentSet.flashcards}
+            currentFlashcardId={appState.currentFlashcard?.id}
+            onFlashcardSelect={handleFlashcardSelect}
+            onFlashcardDelete={handleFlashcardDelete}
+            onFlashcardRename={handleFlashcardRename}
+            onFlashcardReorder={handleFlashcardReorder}
+            onCreateFlashcard={handleCreateFlashcard}
+            onDuplicateStructure={handleDuplicateAsTemplate}
+            canDuplicate={!!appState.currentFlashcard && appState.currentFlashcard.sides.length > 0}
           />
         </div>
       </div>
@@ -811,6 +901,17 @@ export const MainLayout: React.FC = () => {
           </button>
           {appState.currentSet && (
             <>
+              <button
+                onClick={() => {
+                  setSelectedStudyMode('self-test');
+                  setShowStudySetup(true);
+                }}
+                disabled={appState.currentSet.flashcards.length === 0}
+                className="start-study-button"
+                title="Start Study Session"
+              >
+                Start Study
+              </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
